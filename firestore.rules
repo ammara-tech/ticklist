@@ -1,0 +1,132 @@
+rules_version = '2';
+
+// TickList's security rules. Paste them into Firebase: Firestore Database → Rules → Publish.
+//
+// The app's code runs on people's phones, so anyone could change it. These rules run on
+// Google's servers and decide what each signed-in person can read and write, whatever
+// the app sends:
+//   - your profile: only you
+//   - a household and its lists: only its members
+//   - joining: you can add only yourself, and only with a real invite code for that household
+//   - leaving: you can remove only yourself; the last member can delete the household
+//   - invite codes can be looked up one at a time, but never listed
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function household(id) {
+      return get(/databases/$(database)/documents/households/$(id));
+    }
+
+    function isMember(id) {
+      return signedIn() && request.auth.uid in household(id).data.memberIds;
+    }
+
+    // Only these keys may change in an update
+    function onlyChanges(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    function goodName(name, max) {
+      return name is string && name.size() > 0 && name.size() <= max;
+    }
+
+    // ---------- Your profile ----------
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'households', 'current'])
+        && goodName(request.resource.data.name, 30)
+        && request.resource.data.households is list
+        && request.resource.data.households.size() <= 20;
+    }
+
+    // ---------- Invite links ----------
+    match /invites/{code} {
+      // Knowing the code is the invitation: get one by its code, never list them
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && code.size() == 12
+        && request.resource.data.keys().hasOnly(['householdId', 'householdName', 'createdBy'])
+        && request.resource.data.createdBy == request.auth.uid
+        // getAfter: the household may be created in the same batch
+        && request.auth.uid in getAfter(/databases/$(database)/documents/households/$(request.resource.data.householdId)).data.memberIds;
+      allow update: if isMember(resource.data.householdId)
+        && onlyChanges(['householdName'])
+        && goodName(request.resource.data.householdName, 30);
+      // Members can retire a link (when they make a new one, or the last member leaves)
+      allow delete: if isMember(resource.data.householdId);
+    }
+
+    // ---------- Households ----------
+    match /households/{hid} {
+      function members() {
+        return resource.data.memberIds;
+      }
+
+      allow read: if signedIn() && request.auth.uid in resource.data.memberIds;
+
+      // A new household starts with just you in it
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['name', 'createdBy', 'memberIds', 'members', 'inviteCode', 'createdAt'])
+        && goodName(request.resource.data.name, 30)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.memberIds == [request.auth.uid]
+        && request.resource.data.members.keys().hasOnly([request.auth.uid]);
+
+      allow update: if signedIn() && (
+        // Members can rename it or make a new invite link
+        (request.auth.uid in members()
+          && onlyChanges(['name', 'inviteCode'])
+          && goodName(request.resource.data.name, 30))
+        ||
+        // Members can change their own name (and only their own)
+        (request.auth.uid in members()
+          && onlyChanges(['members'])
+          && request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([request.auth.uid])
+          && goodName(request.resource.data.members[request.auth.uid].name, 30))
+        ||
+        // Joining: add only yourself, with a real invite code for this household
+        (!(request.auth.uid in members())
+          && onlyChanges(['memberIds', 'members', 'lastInvite'])
+          && request.resource.data.memberIds.toSet().difference(members().toSet()) == [request.auth.uid].toSet()
+          && members().toSet().difference(request.resource.data.memberIds.toSet()).size() == 0
+          && request.resource.data.memberIds.size() <= 20
+          && request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([request.auth.uid])
+          && get(/databases/$(database)/documents/invites/$(request.resource.data.lastInvite)).data.householdId == hid)
+        ||
+        // Leaving: remove only yourself
+        (request.auth.uid in members()
+          && onlyChanges(['memberIds', 'members'])
+          && members().toSet().difference(request.resource.data.memberIds.toSet()) == [request.auth.uid].toSet()
+          && request.resource.data.memberIds.toSet().difference(members().toSet()).size() == 0
+          && request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([request.auth.uid]))
+      );
+
+      // Only the last member can delete it
+      allow delete: if signedIn() && members() == [request.auth.uid];
+
+      // ---------- The lists ----------
+      match /items/{itemId} {
+        function goodItem(d) {
+          return d.keys().hasOnly(['list', 'text', 'qty', 'category', 'assignee', 'done', 'doneBy', 'doneAt', 'addedBy', 'createdAt'])
+            && d.list in ['shopping', 'chores']
+            && goodName(d.text, 80)
+            && d.qty is string && d.qty.size() <= 20
+            && d.category is string && d.category.size() <= 20
+            && d.assignee is string && d.assignee.size() <= 128
+            && d.done is bool;
+        }
+
+        allow read, delete: if isMember(hid);
+        allow create: if isMember(hid) && goodItem(request.resource.data) && request.resource.data.addedBy == request.auth.uid;
+        allow update: if isMember(hid) && goodItem(request.resource.data)
+          && request.resource.data.addedBy == resource.data.addedBy;
+      }
+    }
+  }
+}

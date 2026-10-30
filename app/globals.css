@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+/*
+  TickList's look: a kitchen notepad stuck to the fridge.
+  Warm paper, a basil-green tick for "done", mustard for the moment you tick something,
+  and plum for chores so the two lists never get mixed up.
+  Dark mode is the same notepad at night, for late-night "we're out of milk" moments.
+*/
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --color-page: #f7f3ea; /* the notepad */
+  --color-card: #ffffff; /* lists, panels and forms */
+  --color-ink: #1d2620; /* text */
+  --color-ink-soft: #55615a; /* quieter text (passes AA on page and card) */
+  --color-line: #e2dccd;
+  --color-basil: #2b7349; /* buttons, links, the tick */
+  --color-on-basil: #ffffff;
+  --color-basil-soft: #e1f0e5;
+  --color-mustard: #f2c14e; /* the flash when you tick something */
+  --color-plum: #6d4c8d; /* chores */
+  --color-plum-soft: #efe7f6;
+  --color-tomato: #b93a12; /* delete, leave, problems */
+
+  --font-sans: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root[data-theme="dark"] {
+  --color-page: #121814;
+  --color-card: #1b231e;
+  --color-ink: #e9efe9;
+  --color-ink-soft: #a3b0a7;
+  --color-line: #2e3a32;
+  --color-basil: #72d394;
+  --color-on-basil: #0f1a13;
+  --color-basil-soft: #1f3427;
+  --color-mustard: #e0b13f;
+  --color-plum: #c6a8ea;
+  --color-plum-soft: #2c2438;
+  --color-tomato: #ff9470;
+  color-scheme: dark;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-basil);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@layer components {
+  /* Round icon buttons */
+  .tool {
+    display: inline-flex;
+    height: 2.5rem;
+    min-width: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    color: var(--color-ink-soft);
+  }
+  .tool:hover {
+    background: var(--color-basil-soft);
+    color: var(--color-basil);
+  }
+  /* Text boxes */
+  .field {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-line);
+    background: var(--color-card);
+    color: var(--color-ink);
+    padding: 0.7rem 0.9rem;
+    font-size: 16px; /* 16px stops phones zooming in when you tap a box */
+  }
+  .field::placeholder {
+    color: var(--color-ink-soft);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    padding: 0.7rem 1.1rem;
+    font-weight: 700;
+    background: var(--color-basil);
+    color: var(--color-on-basil);
+  }
+  .btn:hover {
+    filter: brightness(1.08);
+  }
+  .btn:disabled {
+    opacity: 0.6;
+  }
+  .btn-quiet {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+    border: 1px solid var(--color-line);
+    background: var(--color-card);
+    color: var(--color-ink);
+  }
+  .btn-quiet:hover {
+    border-color: var(--color-basil);
+    color: var(--color-basil);
+  }
+}
+
+/* The ruled lines of a notepad, behind each list */
+.ruled > li + li {
+  border-top: 1px dashed var(--color-line);
+}
+
+/* A short mustard flash when something is ticked */
+@keyframes tick-flash {
+  from {
+    background: color-mix(in srgb, var(--color-mustard) 45%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+.just-ticked {
+  animation: tick-flash 900ms ease-out;
+}
+
+/* The tick drawing itself */
+@keyframes draw {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.tick-draw {
+  stroke-dasharray: 24;
+  animation: draw 280ms ease-out both;
+}
+
+/* New live messages slide up */
+@keyframes rise {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.rise {
+  animation: rise 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .just-ticked,
+  .tick-draw,
+  .rise {
+    animation: none;
+  }
+}
