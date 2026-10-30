@@ -4,7 +4,7 @@
 and it's gone from everyone's phone straight away. Invite people with a link, and keep ticking in the shop
 with no signal.
 
-**Live site:** _add your Vercel link here once it's deployed_
+**Live site:** [ticklist-pi.vercel.app](https://ticklist-pi.vercel.app)
 
 Built with Next.js, TypeScript, Tailwind CSS and Firebase (Authentication and Cloud Firestore).
 
@@ -14,12 +14,26 @@ Built with Next.js, TypeScript, Tailwind CSS and Firebase (Authentication and Cl
 - **Sorted into shop aisles.** Shopping is grouped into Fruit & veg, Bakery, Dairy & eggs, Meat & fish, Pantry and
   so on, in the order you'd walk through a South African supermarket. It knows local favourites like boerewors,
   mielie meal, rooibos, chakalaka and Simba chips.
-- **Amounts as you type them.** "2 milk", "500g mince", "bread x2" and "eggs (dozen)" are all understood.
+- **Amounts as you type them.** "2 milk", "500g mince", "bread x2" and "eggs (dozen)" are all understood, and
+  commas add several at once ("milk, bread, eggs"), so you can paste a list from a message.
+- **Quick add.** One-tap buttons for things you ticked off recently and everyday basics, leaving out anything
+  already on the list.
+- **"I'm at the shop".** Press it before you go, and everyone else sees "Lerato is at the shop. Add what you
+  need!", so nothing gets forgotten. It wears off after 3 hours if you forget to press "I'm done".
+- **Send the list.** Share the shopping list as a message (WhatsApp, or your phone's share menu), sorted by aisle,
+  for someone who doesn't have the app.
 - **Chores with names.** Choose who's doing each chore (or "Anyone"). Your chores are listed first.
+- **Repeating chores.** Set a chore to come back every day or every week. Once it's ticked, it shows "back next
+  Friday" and returns to the list by itself, with no server job needed.
 - **Done and Undo.** Ticked things move to "In the trolley" (or "Done"), showing who ticked them and when.
   Untick by mistake, delete with Undo, or clear the whole section with Undo.
-- **Invite with a link.** Share the household's invite link by WhatsApp or copy it. "New link" makes a fresh
-  one and stops the old one working.
+- **Invite with a link.** Straight after you start a household, the lists open with "Invite your household":
+  copy the link, send it on WhatsApp or use your phone's share menu. It's always on the Household page too, and
+  "New link" makes a fresh one and stops the old one working. Everyone sees "Thabo joined the household".
+- **People and ownership.** Whoever starts a household is its owner. The owner can remove people, hand over
+  ownership, or delete the household for everyone. Anyone can leave; if the owner leaves, the person who's been in
+  it longest becomes the owner, and the last person to leave deletes it. Someone who's removed (or whose household
+  is deleted) is told, and moved to their next household or the Welcome screen.
 - **More than one household.** For example home and a holiday house, with a switcher.
 - **Works offline.** The app opens with no signal, and ticks are saved on the phone and sent when you're back online.
   A badge shows Live, Syncing or Offline.
@@ -71,16 +85,23 @@ rules run on Google's servers and decide what each signed-in person can do, what
 - your profile: only you
 - a household and its lists: only its members
 - joining: you can add only yourself, and only with a real invite code for that household
-- leaving: you can remove only yourself, and only the last member can delete a household
+- "I'm at the shop": you can only put yourself there, or clear it
+- leaving: you can remove only yourself, and an owner who leaves must hand over to someone who's staying
+- the owner can remove one other person at a time, hand over ownership, and delete the household
 - names and items are checked for the right fields and sensible lengths
+
+**Opening a new household.** Creating one saves the household first and only then switches you to it, and if
+Firestore briefly refuses to start listening (before the server knows you're a member), the app quietly tries
+again a few times instead of sending you back to the start (`retryLater()` in `lib/store.ts`).
 
 **Shop aisles.** `categorize()` in `lib/categories.ts` looks for known words, singular or plural, with longer
 phrases first (so "peanut butter" is Pantry, not Dairy). Anything unknown goes under Other.
 
 ## Tests
-`npm test` runs the unit tests in `tests/` with Vitest: reading amounts ("500g mince"), sorting into aisles,
-grouping and ordering the lists, the live messages, "5 min ago", invite codes and links, and names and
-initials. A GitHub Action runs them on every push (`.github/workflows/tests.yml`).
+`npm test` runs the unit tests in `tests/` with Vitest: reading amounts ("500g mince") and several items at once,
+sorting into aisles, grouping and ordering the lists, the live messages, "5 min ago", the list as a message,
+Quick add suggestions, "I'm at the shop" wearing off, repeating chores coming back on the right day, invite
+codes and links, names and initials, and who becomes the owner. A GitHub Action runs them on every push (`.github/workflows/tests.yml`).
 
 ## Setup (run it yourself)
 1. **Firebase:** create a project at [console.firebase.google.com](https://console.firebase.google.com).
@@ -111,7 +132,7 @@ the lists is `firestore.rules`.
 - **The security rules aren't in the automatic tests.** They'd need the Firebase emulator; they're tested by hand.
 - **No push notifications.** You see "Lerato ticked Milk" only while the app is open.
 - **Invite links don't expire** on their own. A member can press "New link" to retire the old one.
-- **No one can remove another member.** People leave by themselves.
+- **Repeating chores use each phone's clock**, so "back tomorrow" switches at midnight where you are.
 - **English only**, and the aisle words are a fixed list rather than learning from what you buy.
 
 ## Use of AI
