@@ -38,7 +38,7 @@ Built with Next.js, TypeScript, Tailwind CSS and Firebase (Authentication and Cl
 - **Works offline.** The app opens with no signal, and ticks are saved on the phone and sent when you're back online.
   A badge shows Live, Syncing or Offline.
 - **Installable.** "Add to Home screen" opens it full screen, like an app.
-- **Sign in** with email and password (with a reset email) or Google. Light and dark themes. Press **/** to add.
+- **Sign in** with email and password (with a reset email) or Google. If the browser blocks Google's pop-up window, the whole page goes to Google instead. Sign-in errors say what went wrong in plain words, with Firebase's error code underneath. Light and dark themes. Press **/** to add.
 
 ## Design
 A kitchen notepad stuck to the fridge: warm paper, a basil-green tick for "done", a mustard flash when you tick
