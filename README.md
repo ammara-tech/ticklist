@@ -39,7 +39,7 @@ Built with Next.js, TypeScript, Tailwind CSS and Firebase (Authentication and Cl
   A badge shows Live, Syncing or Offline.
 - **Installable.** "Add to Home screen" opens it full screen, like an app.
 - **Sign in** with email and password (with a reset email) or Google. If the browser blocks Google's pop-up window, the whole page goes to Google instead. Sign-in errors say what went wrong in plain words, with Firebase's error code underneath. Light and dark themes. Press **/** to add.
-- **Fast first load:** a new visitor gets the sign-in screen straight from the server, without waiting for Firebase to load. Someone who has signed in on the device before sees the loading screen instead while Firebase checks (a small hint saved on the device decides which).
+- **Fast first load:** a new visitor gets the sign-in screen straight from the server, without waiting for Firebase to load. Someone who has signed in on the device before sees the loading screen instead while Firebase checks (a small hint saved on the device decides which). Google's sign-in helper only loads when someone presses **Continue with Google**, not on every visit.
 
 ## Design
 A kitchen notepad stuck to the fridge: warm paper, a basil-green tick for "done", a mustard flash when you tick
