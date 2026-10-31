@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { usePathname } from "next/navigation";
 import Icon from "@/components/Icon";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -19,7 +20,7 @@ export default function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; code: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const invited = typeof window !== "undefined" && window.location.pathname === "/join";
+  const invited = usePathname() === "/join"; // the same on the server and in the browser
 
   // If Google sign-in went the full-page way and failed, say why when the page comes back.
   useEffect(() => {
@@ -73,7 +74,7 @@ export default function LoginScreen() {
         </p>
       </aside>
 
-      <section className="flex flex-col px-5 py-6 sm:px-10">
+      <main className="flex flex-col px-5 py-6 sm:px-10">
         <div className="flex items-center justify-between">
           <p className="flex items-center gap-2 text-xl font-extrabold lg:invisible">
             <Logo />
@@ -166,7 +167,7 @@ export default function LoginScreen() {
           </p>
           <p className="mt-6 text-sm text-ink-soft">Only the people in your household can see your lists. They&apos;re stored in Google&apos;s Firebase database.</p>
         </div>
-      </section>
+      </main>
     </div>
   );
 }

@@ -21,7 +21,7 @@ export const viewport: Viewport = {
 };
 
 // Applies the saved (or the phone's) light/dark theme before the page is drawn, so there's no flash
-const themeScript = `try{var t=localStorage.getItem("ticklist:theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch(e){}`;
+const themeScript = `try{var t=localStorage.getItem("ticklist:theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t;if(localStorage.getItem("ticklist:signedIn"))document.documentElement.dataset.signedIn="1"}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

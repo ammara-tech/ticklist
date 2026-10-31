@@ -32,8 +32,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   if (!firebaseConfigured) return <SetupNeeded />;
-  if (auth.status === "loading") return <Splash text="Opening TickList…" />;
-  if (auth.status === "signedOut") return <LoginScreen />;
+  // Until Firebase has checked, both screens are on the page and the saved hint picks one
+  // (see lib/auth.ts). The sign-in screen stays in the same place, so nothing typed is lost.
+  if (auth.status !== "signedIn")
+    return (
+      <>
+        {auth.status === "loading" && (
+          <div className="gate-splash">
+            <Splash text="Opening TickList…" />
+          </div>
+        )}
+        <div className={auth.status === "loading" ? "gate-login" : undefined}>
+          <LoginScreen />
+        </div>
+      </>
+    );
   if (app.status === "loading" && path !== "/join") return <Splash text="Getting your lists…" />;
 
   // The join page works before you're in a household
