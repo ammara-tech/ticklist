@@ -14,6 +14,10 @@ Built with Next.js, TypeScript, Tailwind CSS and Firebase (Authentication and Cl
 - **Sorted into shop aisles.** Shopping is grouped into Fruit & veg, Bakery, Dairy & eggs, Meat & fish, Pantry and
   so on, in the order you'd walk through a South African supermarket. It knows local favourites like boerewors,
   mielie meal, rooibos, chakalaka and Simba chips.
+- **Several at once.** Type "milk, bread, eggs" (or paste a list, one per line, with or without bullets) and each
+  becomes its own item. A comma inside a price ("R32,99") doesn't split it.
+- **Quick add.** One tap adds things you've ticked off recently, then everyday basics like milk and bread, leaving
+  out anything already on the list.
 - **Amounts and prices as you type them.** "2 milk", "500g mince", "bread x2" and "eggs (dozen)" are all
   understood, and a price can go at the start or end: "2 milk R32,99" or "R45 bread".
 - **What it adds up to.** When items have prices, the Shopping list shows what's **still to buy** and what's
@@ -26,13 +30,23 @@ Built with Next.js, TypeScript, Tailwind CSS and Firebase (Authentication and Cl
   next person in the household each time it's done. "Clear" leaves repeating chores alone.
 - **Done and Undo.** Ticked things move to "In the trolley" (or "Done"), showing who ticked them and when.
   Untick by mistake, delete with Undo, or clear the whole section with Undo.
+- **"I'm at the shop".** Press it and everyone else sees "Lerato is at the shop. Add what you need now!", so they
+  can add things in time. Press "I'm done shopping" when you leave; it also wears off by itself after a few hours.
+- **Send the list.** Sends the shopping list, sorted by aisle, on WhatsApp (or the phone's share sheet) to someone
+  who doesn't have the app.
 - **Invite with a link.** The Household page has your household's invite link: copy it or send it on WhatsApp.
-  "New link" makes a fresh one and stops the old one working.
+  "New link" makes a fresh one and stops the old one working. While you're the only member, the lists remind you to
+  invite people. When someone joins, everyone sees "Thabo joined the household".
+- **An owner.** Whoever starts a household is its owner, marked on the Household page. The owner can remove
+  people, make someone else the owner, and delete the household for everyone. If the owner leaves, the person who's
+  been in the household longest becomes the owner. Someone who's removed (or whose household is deleted) is told
+  "You're no longer in …" and moved on to their next household.
 - **Your household.** Rename it, change your name, and leave it; the last person to leave deletes it, with its
   lists and invite link.
 - **More than one household.** For example home and a holiday house, with a switcher.
 - **Works offline.** The app opens with no signal, and ticks are saved on the phone and sent when you're back online.
-  A badge shows Live, Syncing or Offline.
+  A badge shows Live, Syncing or Offline. Opening a household you've only just made or joined tries again a few
+  times if it isn't ready yet, instead of showing an error.
 - **Installable.** "Add to Home screen" opens it full screen, like an app.
 - **Sign in** with email and password (with a reset email) or Google. If the browser blocks Google's pop-up window, the whole page goes to Google instead. Sign-in errors say what went wrong in plain words, with Firebase's error code underneath. Light and dark themes. Press **/** to add.
 - **Fast first load:** a new visitor gets the sign-in screen straight from the server, without waiting for Firebase to load. Someone who has signed in on the device before sees the loading screen instead while Firebase checks (a small hint saved on the device decides which). Google's sign-in helper only loads when someone presses **Continue with Google**, not on every visit.
@@ -82,7 +96,10 @@ rules run on Google's servers and decide what each signed-in person can do, what
 - your profile: only you
 - a household and its lists: only its members
 - joining: you can add only yourself, and only with a real invite code for that household
-- leaving: you can remove only yourself, and only the last member can delete the household
+- leaving: you can remove only yourself; an owner who leaves must hand over to someone who's staying
+- the owner: only the owner can remove someone (one person at a time, never themselves), hand over ownership (only
+  to someone in the household), or delete the household for everyone; the last member can delete it too
+- "I'm at the shop": you can only put yourself there, or take yourself off
 - spending: members can only change the "spent per month" totals, not anything else about the household that way
 - names and items are checked for the right fields and sensible lengths, prices must be whole cents, and a repeat
   can only be one of the choices in the app
@@ -97,11 +114,20 @@ Ticking a priced item adds it to the household's `spent` total for that month (i
 Firestore's `increment()`, which adds safely even if two people tick things at the same moment; unticking takes it
 off again. Items saved before prices and repeats existed are read with sensible defaults (`readItem()`).
 
+**The owner and the shop** (`lib/household.ts`). The owner is the household's `createdBy`. `nextOwner()` picks who
+takes over when the owner leaves, `atShop()` lists who's at the shop (ignoring anyone who pressed it too long ago or
+has left), and `householdChanges()` turns a change to the household into the live messages ("Thabo joined the
+household"). When a household can't be opened, the live store (`lib/store.ts`) waits a moment and tries again a few
+times; only if it still can't, or the server says you're not in it, does it take that household off your profile
+(a copy saved on the phone never counts, because it may be out of date).
+
 **Shop aisles.** `categorize()` in `lib/categories.ts` looks for known words, singular or plural, with longer
 phrases first (so "peanut butter" is Pantry, not Dairy). Anything unknown goes under Other.
 
 ## Tests
 `npm test` runs the unit tests in `tests/` with Vitest: reading amounts ("500g mince") and prices ("2 milk R32,99"),
+adding several at once, Quick add, the WhatsApp message, the owner and who takes over, "I'm at the shop" wearing off,
+"joined the household" messages,
 sorting into aisles, grouping and ordering the lists, the live messages, "5 min ago", the shopping totals and
 spent per month (including the month in South African time), repeating chores coming back on the right day and
 taking turns, items saved before prices existed, invite codes and links, and names and initials. A GitHub Action runs
@@ -139,7 +165,9 @@ the lists is `firestore.rules`.
 - **Repeating chores use each phone's clock**, so "back tomorrow" switches at midnight where you are.
 - **Spending only counts what's ticked off with a price**, and one price per line (not per item), so "2 milk R32,99"
   means R32,99 for both.
-- **No owner role yet.** Everyone in a household can do the same things; nobody can remove someone else.
+- **Someone who's removed keeps what's already on their phone** until the app notices (usually straight away);
+  the rules stop them reading or changing anything new.
+- **"I'm at the shop" only shows while the app is open**, like the other live messages.
 - **English only**, and the aisle words are a fixed list rather than learning from what you buy.
 
 ## Use of AI

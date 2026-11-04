@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import Icon from "@/components/Icon";
 import ItemRow from "@/components/ItemRow";
-import { addItem, clearDone, removeItem, restoreItems } from "@/lib/actions";
+import { addItem, clearDone, removeItem, restoreItems, setAtShop } from "@/lib/actions";
+import { atShop } from "@/lib/household";
 import { categoryInfo } from "@/lib/categories";
-import { counts, doneItems, shoppingAisles, shoppingTotals, sortedChores } from "@/lib/items";
+import { counts, doneItems, listMessage, quickAdd, shoppingAisles, shoppingTotals, sortedChores } from "@/lib/items";
 import { formatRand, lastMonths } from "@/lib/money";
 import { REPEAT_CHOICES, readRepeatValue } from "@/lib/repeat";
 import { memberList } from "@/lib/members";
@@ -20,6 +22,10 @@ import type { Item, ListName } from "@/lib/types";
   - Chores show who's doing each one, yours first. A chore can repeat (lib/repeat.ts), and
     people can take turns.
   - Ticked things move to "Done", where you can untick them or clear them all (with Undo).
+  - Type several things at once with commas or new lines ("milk, bread, eggs").
+  - Quick add: one tap for things you buy often (lib/items.ts).
+  - "I'm at the shop" tells everyone, so they can add what they need in time (lib/household.ts).
+  - "Send the list" sends the shopping list on WhatsApp to someone without the app.
   Press "/" to jump to the Add box.
 */
 
@@ -33,6 +39,7 @@ export default function Lists() {
   const [repeat, setRepeatChoice] = useState("0");
   const [undo, setUndo] = useState<{ text: string; items: Item[] } | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [added, setAdded] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -65,6 +72,13 @@ export default function Lists() {
 
   useEffect(() => () => clearTimeout(undoTimer.current), []);
 
+  // "Added 3 things" fades after a moment
+  useEffect(() => {
+    if (!added) return;
+    const t = setTimeout(() => setAdded(null), 2500);
+    return () => clearTimeout(t);
+  }, [added]);
+
   if (!household || !uid) return null;
 
   function choose(next: ListName) {
@@ -77,8 +91,21 @@ export default function Lists() {
   function add(e: FormEvent) {
     e.preventDefault();
     const r = readRepeatValue(repeat);
-    if (addItem(tab, text, assignee, r.repeatDays, r.rotate)) setText("");
+    const added = addItem(tab, text, assignee, r.repeatDays, r.rotate);
+    if (added) {
+      setText("");
+      if (added > 1) setAdded(`Added ${added} things`);
+    }
     input.current?.focus();
+  }
+
+  function sendList() {
+    const message = listMessage(household!.name, items, Date.now());
+    if (navigator.share && window.matchMedia("(pointer: coarse)").matches) {
+      navigator.share({ text: message }).catch(() => {});
+      return;
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
   }
 
   function offerUndo(message: string, removed: Item[]) {
@@ -106,10 +133,36 @@ export default function Lists() {
   const clearable = done.filter((i) => !(i.repeatDays > 0)).length;
   const people = memberList(household, uid);
   const rowProps = { household, me: uid, now, onDelete: remove };
+  const shoppers = atShop(household, now);
+  const imAtShop = shoppers.some((p) => p.uid === uid);
+  const othersAtShop = shoppers.filter((p) => p.uid !== uid);
+  const suggestions = tab === "shopping" ? quickAdd(items, now) : [];
+  const alone = household.memberIds.length === 1;
 
   return (
     <div>
       <h1 className="sr-only">{household.name}: shopping and chores</h1>
+
+      {/* Someone else is at the shop */}
+      {othersAtShop.length > 0 && (
+        <p role="status" className="mb-4 flex items-center gap-3 rounded-2xl border border-basil/40 bg-basil-soft px-4 py-3 text-sm font-semibold">
+          <Icon name="cart" className="h-5 w-5 shrink-0 text-basil" />
+          <span>
+            {othersAtShop.map((p) => p.name).join(" and ")} {othersAtShop.length === 1 ? "is" : "are"} at the shop. Add what you need now!
+          </span>
+        </p>
+      )}
+
+      {/* Just you so far: invite the others */}
+      {alone && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-line px-4 py-3 text-sm">
+          <Icon name="people" className="h-5 w-5 shrink-0 text-plum" />
+          <span className="flex-1">It&apos;s just you in {household.name} so far. Invite the people you live with to share the lists.</span>
+          <Link href="/household" className="btn-quiet px-3 py-1.5 text-sm">
+            Invite people
+          </Link>
+        </div>
+      )}
 
       {/* Tabs */}
       <div role="tablist" aria-label="Lists" className="grid grid-cols-2 gap-1 rounded-2xl border border-line bg-card p-1">
@@ -152,7 +205,7 @@ export default function Lists() {
             maxLength={100}
             autoComplete="off"
             enterKeyHint="done"
-            placeholder={tab === "shopping" ? "Add, e.g. 2 milk" : "Add a chore, e.g. Bins out"}
+            placeholder={tab === "shopping" ? "Add, e.g. 2 milk, bread, eggs" : "Add a chore, e.g. Bins out"}
             className="field min-w-0 flex-1 basis-56 py-3"
           />
           {tab === "chores" && (
@@ -187,10 +240,59 @@ export default function Lists() {
         </form>
         <p className="mt-2 text-xs text-ink-soft">
           {tab === "shopping"
-            ? "Amounts and prices work too: \"500g mince\", \"bread x2\" or \"2 milk R32,99\". Things are sorted into shop aisles for you."
+            ? "Add several at once with commas. Amounts and prices work too: \"500g mince\", \"bread x2\" or \"2 milk R32,99\". Things are sorted into shop aisles for you."
             : "Tap the initials on a chore to change who's doing it, or the arrows to make it repeat."}{" "}
           <span className="hidden sm:inline">Press / to add.</span>
+          {added && (
+            <span role="status" className="ml-2 font-semibold text-basil">
+              {added}
+            </span>
+          )}
         </p>
+
+        {/* Quick add: one tap for things you buy often */}
+        {suggestions.length > 0 && (
+          <div className="mt-3">
+            <p id="quick-add" className="text-xs font-bold uppercase tracking-widest text-ink-soft">
+              Quick add
+            </p>
+            <ul aria-labelledby="quick-add" className="mt-2 flex flex-wrap gap-2">
+              {suggestions.map((s) => (
+                <li key={s}>
+                  <button
+                    type="button"
+                    onClick={() => addItem("shopping", s)}
+                    className="flex items-center gap-1 rounded-full border border-line bg-card px-3 py-1.5 text-sm font-semibold hover:border-basil hover:text-basil"
+                  >
+                    <Icon name="plus" className="h-3.5 w-3.5" />
+                    {s}
+                    <span className="sr-only"> to the shopping list</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* At the shop, and sending the list */}
+        {tab === "shopping" && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setAtShop(!imAtShop)}
+              className={imAtShop ? "btn py-2.5" : "btn-quiet py-2.5"}
+            >
+              <Icon name={imAtShop ? "check" : "cart"} />
+              {imAtShop ? "I'm done shopping" : "I'm at the shop"}
+            </button>
+            {n.shopping > 0 && (
+              <button type="button" onClick={sendList} className="btn-quiet py-2.5">
+                <Icon name="whatsapp" />
+                Send the list
+              </button>
+            )}
+          </div>
+        )}
 
         {/* What it adds up to, when items have prices */}
         {tab === "shopping" && (money.toBuy > 0 || money.inTrolley > 0) && (

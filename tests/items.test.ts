@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { changesBetween, counts, describeChange, doneItems, shoppingAisles, sortedChores, timeAgo } from "@/lib/items";
+import { BASICS, changesBetween, counts, describeChange, doneItems, listMessage, quickAdd, shoppingAisles, sortedChores, timeAgo } from "@/lib/items";
 import type { Item } from "@/lib/types";
 
 const item = (over: Partial<Item>): Item => ({
@@ -89,5 +89,47 @@ describe("time ago", () => {
     [4 * 86_400_000, "4 days ago"],
   ])("%i ms ago → %s", (ms: number, text: string) => {
     expect(timeAgo(now - ms, now)).toBe(text);
+  });
+});
+
+describe("quick add", () => {
+  it("suggests things ticked off recently first, then everyday basics", () => {
+    const items = [item({ id: "1", text: "Rooibos", done: true, doneAt: 10 })];
+    const out = quickAdd(items, 100);
+    expect(out[0]).toBe("Rooibos");
+    expect(out).toHaveLength(8);
+    expect(out.slice(1)).toEqual(BASICS.slice(0, 7));
+  });
+
+  it("leaves out what's already on the list, whatever the capitals", () => {
+    const out = quickAdd([item({ id: "1", text: "milk" })], 100);
+    expect(out).not.toContain("Milk");
+  });
+
+  it("doesn't suggest the same thing twice", () => {
+    const items = [item({ id: "1", text: "Milk", done: true, doneAt: 10 }), item({ id: "2", text: "milk", done: true, doneAt: 9 })];
+    expect(quickAdd(items, 100).filter((t) => t.toLowerCase() === "milk")).toHaveLength(1);
+  });
+});
+
+describe("send the list", () => {
+  it("writes the shopping list for WhatsApp, by aisle, without what's in the trolley", () => {
+    const items = [
+      item({ id: "1", text: "Milk", qty: "2", category: "dairy" }),
+      item({ id: "2", text: "Apples", category: "fresh" }),
+      item({ id: "3", text: "Bread", category: "bakery", done: true, doneAt: 10 }),
+      item({ id: "4", list: "chores", text: "Bins out", category: "other" }),
+    ];
+    const message = listMessage("Home", items, 100);
+    expect(message.split("\n")[0]).toBe("🛒 Home shopping list");
+    expect(message).toContain("• Milk (2)");
+    expect(message).toContain("• Apples");
+    expect(message).not.toContain("Bread");
+    expect(message).not.toContain("Bins out");
+    expect(message.indexOf("Apples")).toBeLessThan(message.indexOf("Milk")); // fresh comes before dairy in the shop
+  });
+
+  it("says so when the list is empty", () => {
+    expect(listMessage("Home", [], 100)).toBe("Home: the shopping list is empty.");
   });
 });

@@ -103,3 +103,39 @@ export function changesBetween(before: Map<string, Item>, after: Map<string, Ite
   }
   return messages;
 }
+
+/* ---------- Quick add ---------- */
+
+/** Everyday things to suggest when there's no history yet */
+export const BASICS = ["Milk", "Bread", "Eggs", "Butter", "Bananas", "Tomatoes", "Onions", "Potatoes", "Rice", "Sugar", "Tea", "Coffee", "Toilet paper", "Dishwashing liquid"];
+
+/**
+ * One-tap suggestions for the shopping list: things ticked off recently (most recent first),
+ * then everyday basics, leaving out anything already on the list.
+ */
+export function quickAdd(items: Item[], now = Date.now(), limit = 8) {
+  const onList = new Set(openItems(items, "shopping", now).map((i) => i.text.toLowerCase()));
+  const recent = doneItems(items, "shopping", now).map((i) => i.text);
+  const out: string[] = [];
+  for (const text of [...recent, ...BASICS]) {
+    const key = text.toLowerCase();
+    if (onList.has(key) || out.some((t) => t.toLowerCase() === key)) continue;
+    out.push(text);
+    if (out.length === limit) break;
+  }
+  return out;
+}
+
+/* ---------- Send the list ---------- */
+
+/** The shopping list as a message for WhatsApp, sorted by aisle, for someone without the app */
+export function listMessage(householdName: string, items: Item[], now = Date.now()) {
+  const aisles = shoppingAisles(items, now);
+  if (aisles.length === 0) return `${householdName}: the shopping list is empty.`;
+  const lines = [`🛒 ${householdName} shopping list`];
+  for (const aisle of aisles) {
+    lines.push("", `*${aisle.label}*`);
+    for (const i of aisle.items) lines.push(`• ${i.text}${i.qty ? ` (${i.qty})` : ""}`);
+  }
+  return lines.join("\n");
+}

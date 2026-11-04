@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseItem, qtyLabel } from "@/lib/parse";
+import { parseItem, parseMany, qtyLabel } from "@/lib/parse";
 
 describe("reading what's typed into the Add box", () => {
   it.each([
@@ -32,5 +32,27 @@ describe("reading what's typed into the Add box", () => {
   it("shows a plain number as ×2, and a unit as it is", () => {
     expect(qtyLabel("2")).toBe("×2");
     expect(qtyLabel("500g")).toBe("500g");
+  });
+});
+
+describe("several at once", () => {
+  it("splits on commas and new lines", () => {
+    expect(parseMany("milk, bread,eggs").map((p) => p.text)).toEqual(["Milk", "Bread", "Eggs"]);
+    expect(parseMany("milk\nbread").map((p) => p.text)).toEqual(["Milk", "Bread"]);
+  });
+
+  it("keeps a comma inside a price", () => {
+    const [milk, bread] = parseMany("2 milk R32,99, bread");
+    expect(milk.price).toBe(3299);
+    expect(bread.text).toBe("Bread");
+  });
+
+  it("strips bullets and numbers from a pasted list", () => {
+    expect(parseMany("- milk\n• bread\n1. eggs\n2) tea").map((p) => p.text)).toEqual(["Milk", "Bread", "Eggs", "Tea"]);
+  });
+
+  it("skips empty parts, and adds at most 50 at a time", () => {
+    expect(parseMany("milk,, ,\n\nbread")).toHaveLength(2);
+    expect(parseMany(Array.from({ length: 60 }, (_, i) => `thing ${i}`).join(","))).toHaveLength(50);
   });
 });

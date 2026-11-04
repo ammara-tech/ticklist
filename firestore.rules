@@ -8,7 +8,10 @@ rules_version = '2';
 //   - your profile: only you
 //   - a household and its lists: only its members (including prices, repeats and spending)
 //   - joining: you can add only yourself, and only with a real invite code for that household
-//   - leaving: you can remove only yourself; the last member can delete the household
+//   - leaving: you can remove only yourself; an owner who leaves hands over to someone staying
+//   - the owner can remove people, hand over ownership and delete the household for everyone
+//   - "I'm at the shop": you can only put yourself there, or take yourself off
+//   - the last member can delete the household
 //   - invite codes can be looked up one at a time, but never listed
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -105,16 +108,42 @@ service cloud.firestore {
           && request.resource.data.spent is map
           && request.resource.data.spent.size() <= 60)
         ||
-        // Leaving: remove only yourself
+        // "I'm at the shop": you can only put yourself there, or take yourself off
         (request.auth.uid in members()
-          && onlyChanges(['memberIds', 'members'])
+          && onlyChanges(['atShop'])
+          && request.resource.data.atShop is map
+          && request.resource.data.atShop.diff(resource.data.get('atShop', {})).affectedKeys().hasOnly([request.auth.uid]))
+        ||
+        // Leaving: remove only yourself. An owner who leaves must hand over to someone who's staying.
+        (request.auth.uid in members()
+          && onlyChanges(['memberIds', 'members', 'atShop', 'createdBy'])
           && members().toSet().difference(request.resource.data.memberIds.toSet()) == [request.auth.uid].toSet()
           && request.resource.data.memberIds.toSet().difference(members().toSet()).size() == 0
-          && request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([request.auth.uid]))
+          && request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([request.auth.uid])
+          && request.resource.data.get('atShop', {}).diff(resource.data.get('atShop', {})).affectedKeys().hasOnly([request.auth.uid])
+          && (resource.data.createdBy == request.auth.uid
+                ? request.resource.data.createdBy in request.resource.data.memberIds
+                : request.resource.data.createdBy == resource.data.createdBy))
+        ||
+        // The owner removes one other person
+        (resource.data.createdBy == request.auth.uid
+          && onlyChanges(['memberIds', 'members', 'atShop'])
+          && request.resource.data.memberIds.toSet().difference(members().toSet()).size() == 0
+          && members().toSet().difference(request.resource.data.memberIds.toSet()).size() == 1
+          && request.auth.uid in request.resource.data.memberIds
+          && request.resource.data.members.diff(resource.data.members).affectedKeys()
+               == members().toSet().difference(request.resource.data.memberIds.toSet())
+          && request.resource.data.get('atShop', {}).diff(resource.data.get('atShop', {})).affectedKeys()
+               .difference(members().toSet().difference(request.resource.data.memberIds.toSet())).size() == 0)
+        ||
+        // The owner hands over to someone in the household
+        (resource.data.createdBy == request.auth.uid
+          && onlyChanges(['createdBy'])
+          && request.resource.data.createdBy in members())
       );
 
-      // Only the last member can delete it
-      allow delete: if signedIn() && members() == [request.auth.uid];
+      // The last member can delete it, and so can the owner ("Delete for everyone")
+      allow delete: if signedIn() && (members() == [request.auth.uid] || resource.data.createdBy == request.auth.uid);
 
       // ---------- The lists ----------
       match /items/{itemId} {

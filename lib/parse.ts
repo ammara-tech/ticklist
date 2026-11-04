@@ -73,3 +73,16 @@ export function parseItem(input: string): Parsed | null {
 export function qtyLabel(qty: string) {
   return /^\d+(?:[.,]\d+)?$/.test(qty) ? `×${qty}` : qty;
 }
+
+/**
+ * Several things at once: "milk, bread, eggs" or a pasted list (one per line, with or without
+ * bullets) becomes one item each. A comma inside a price ("R32,99") doesn't split it.
+ */
+export function parseMany(input: string): Parsed[] {
+  return input
+    .split(/\n|,(?!\d)/)
+    .map((part) => part.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, ""))
+    .map(parseItem)
+    .filter((p): p is Parsed => p !== null)
+    .slice(0, 50);
+}

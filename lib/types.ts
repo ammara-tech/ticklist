@@ -22,12 +22,14 @@ export type Member = {
 export type Household = {
   id: string;
   name: string;
-  createdBy: string;
+  createdBy: string; // the owner: whoever started it, or was handed it (lib/household.ts)
   memberIds: string[];
   members: Record<string, Member>;
   inviteCode: string;
   createdAt: number;
   spent?: Record<string, number>; // cents ticked off the shopping list per month: { "2026-11": 245050 }
+  atShop?: Record<string, number>; // who pressed "I'm at the shop", and when (lib/household.ts)
+  lastInvite?: string; // the invite code used by the last person to join (the rules check it)
 };
 
 export type Item = {

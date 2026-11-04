@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { collection, doc, onSnapshot, type Unsubscribe } from "firebase/firestore";
 import { firebase } from "@/lib/firebase";
 import { changesBetween, readItem } from "@/lib/items";
+import { householdChanges } from "@/lib/household";
 import type { Household, Item, Profile } from "@/lib/types";
 
 /*
@@ -87,6 +88,7 @@ export function reportProblem(problem: string | null) {
 }
 
 function stopWatchingHousehold() {
+  clearTimeout(retryTimer);
   stopHousehold?.();
   stopItems?.();
   stopHousehold = stopItems = null;
@@ -95,10 +97,43 @@ function stopWatchingHousehold() {
   firstItems = true;
 }
 
-function watchHousehold(id: string) {
+/*
+  Right after you create or join a household, Google's servers can take a moment to know
+  you're a member, and refuse to show it ("permission denied"). Instead of sending you back
+  to the start, the app quietly tries again a few times (retryLater). Only if it still can't
+  read it, or the household is gone, does it move you on (lostHousehold).
+*/
+const RETRY_DELAYS = [400, 800, 1600, 3200];
+let retries = 0;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+function retryLater(id: string) {
+  if (retries >= RETRY_DELAYS.length) return false;
+  const delay = RETRY_DELAYS[retries++];
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(() => {
+    if (watching !== id) return;
+    watching = null; // so watchHousehold starts again
+    watchHousehold(id, true);
+  }, delay);
+  return true;
+}
+
+/** You were removed, or the household was deleted: say so, and move to your next household */
+function lostHousehold(id: string) {
+  const name = state.household?.id === id ? state.household.name : "that household";
+  stopWatchingHousehold();
+  set({ household: null, items: [], status: "noHousehold" });
+  addToast(`You're no longer in ${name}.`);
+  // Imported here, not at the top, because actions.ts imports this file
+  import("@/lib/actions").then(({ forgetHousehold }) => forgetHousehold(id));
+}
+
+function watchHousehold(id: string, retrying = false) {
   if (watching === id) return;
   stopWatchingHousehold();
   watching = id;
+  if (!retrying) retries = 0;
   const { db } = firebase();
   set({ household: null, items: [], status: "loading" });
 
@@ -109,13 +144,21 @@ function watchHousehold(id: string) {
       setPending("household", snap.metadata.hasPendingWrites);
       const data = snap.data() as Omit<Household, "id"> | undefined;
       if (!data || !state.uid || !data.memberIds.includes(state.uid)) {
-        // The household was deleted, or you're no longer in it
-        set({ household: null, status: "noHousehold" });
+        // Only the server's answer counts: a copy saved on this phone may simply be out of date
+        if (!snap.metadata.fromCache) lostHousehold(id);
         return;
       }
-      set({ household: { id, ...data }, status: "ready" });
+      retries = 0;
+      const next = { id, ...data };
+      if (state.uid && state.household?.id === id) {
+        for (const text of householdChanges(state.household, next, state.uid, Date.now())) addToast(text);
+      }
+      set({ household: next, status: "ready" });
     },
-    () => set({ household: null, status: "noHousehold" }), // not allowed to read it any more
+    () => {
+      // Not allowed to read it: maybe the server doesn't know you're in it yet, so try again first
+      if (!retryLater(id)) lostHousehold(id);
+    },
   );
 
   stopItems = onSnapshot(

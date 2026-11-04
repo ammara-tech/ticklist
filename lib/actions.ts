@@ -17,7 +17,9 @@ import { firebase } from "@/lib/firebase";
 import { categorize } from "@/lib/categories";
 import { makeInviteCode, isInviteCode } from "@/lib/invite";
 import { MAX_NAME } from "@/lib/members";
-import { parseItem } from "@/lib/parse";
+import { parseItem, parseMany } from "@/lib/parse";
+import { isOwner, nextOwner } from "@/lib/household";
+import { MAX_ITEMS } from "@/lib/items";
 import { monthKey } from "@/lib/money";
 import { isOpen, tickChanges } from "@/lib/repeat";
 import { getApp, reportProblem } from "@/lib/store";
@@ -137,7 +139,10 @@ export async function newInviteLink() {
   await batch.commit();
 }
 
-/** Leave the household. The last person to leave deletes it, with its lists and invite link. */
+/**
+ * Leave the household. If you're the owner, the person who's been in it longest becomes the owner.
+ * The last person to leave deletes it, with its lists and invite link.
+ */
 export async function leaveHousehold() {
   const uid = me();
   const household = getApp().household;
@@ -156,8 +161,65 @@ export async function leaveHousehold() {
     batch.delete(ref);
     await batch.commit();
   } else {
-    await updateDoc(ref, { memberIds: arrayRemove(uid), [`members.${uid}`]: deleteField() });
+    await updateDoc(ref, {
+      memberIds: arrayRemove(uid),
+      [`members.${uid}`]: deleteField(),
+      [`atShop.${uid}`]: deleteField(),
+      ...(isOwner(household, uid) ? { createdBy: nextOwner(household, uid) } : {}),
+    });
   }
+}
+
+// ---------- Owner only (the rules check it's really the owner) ----------
+
+/** Removes someone from the household. Their phone notices and moves them on. */
+export async function removeMember(memberId: string) {
+  const household = getApp().household;
+  if (!household || !isOwner(household, me()) || memberId === me()) return;
+  await updateDoc(doc(db(), "households", household.id), {
+    memberIds: arrayRemove(memberId),
+    [`members.${memberId}`]: deleteField(),
+    [`atShop.${memberId}`]: deleteField(),
+  });
+}
+
+/** Makes someone else the owner */
+export async function handOver(memberId: string) {
+  const household = getApp().household;
+  if (!household || !isOwner(household, me()) || !household.memberIds.includes(memberId)) return;
+  await updateDoc(doc(db(), "households", household.id), { createdBy: memberId });
+}
+
+/** Deletes the household for everyone: its lists, its invite link and the household itself */
+export async function deleteHouseholdForEveryone() {
+  const uid = me();
+  const household = getApp().household;
+  if (!household || !isOwner(household, uid)) return;
+  const ref = doc(db(), "households", household.id);
+  await setDoc(doc(db(), "users", uid), { households: arrayRemove(household.id), current: null }, { merge: true });
+  const items = await getDocs(collection(ref, "items"));
+  const batch = writeBatch(db());
+  items.docs.forEach((d) => batch.delete(d.ref));
+  batch.delete(doc(db(), "invites", household.inviteCode));
+  batch.delete(ref);
+  await batch.commit();
+}
+
+// ---------- I'm at the shop ----------
+
+/** Tells everyone you're at the shop (or that you're done). It wears off by itself after 3 hours. */
+export function setAtShop(there: boolean) {
+  const id = householdId();
+  if (!id) return;
+  quietly(updateDoc(doc(db(), "households", id), { [`atShop.${me()}`]: there ? Date.now() : deleteField() }));
+}
+
+/** Takes a household you can no longer open (you were removed, or it was deleted) off your profile */
+export function forgetHousehold(id: string) {
+  const { profile, uid } = getApp();
+  if (!uid || !profile.households.includes(id)) return;
+  const rest = profile.households.filter((h) => h !== id);
+  quietly(setDoc(doc(db(), "users", uid), { households: arrayRemove(id), current: rest[0] ?? null }, { merge: true }));
 }
 
 /** Your name, in your profile and in every household you're in */
@@ -176,11 +238,24 @@ export function setMyName(name: string) {
 
 const itemsOf = (id: string) => collection(db(), "households", id, "items");
 
-/** Adds what was typed ("2 milk R32") to a list. Returns false if there was nothing to add. */
+/**
+ * Adds what was typed to a list: one thing ("2 milk R32"), or several separated by commas or
+ * new lines ("milk, bread, eggs"). Returns how many were added (0 if there was nothing to add).
+ */
 export function addItem(list: ListName, input: string, assignee = "", repeatDays = 0, rotate = false) {
   const id = householdId();
-  const parsed = parseItem(input);
-  if (!id || !parsed) return false;
+  if (!id) return 0;
+  const room = MAX_ITEMS - getApp().items.length;
+  const all = parseMany(input).slice(0, Math.max(0, room));
+  if (all.length === 0) return 0;
+  const batch = writeBatch(db());
+  const now = Date.now();
+  all.forEach((parsed, n) => batch.set(doc(itemsOf(id)), newItem(list, parsed, assignee, repeatDays, rotate, now + n)));
+  quietly(batch.commit());
+  return all.length;
+}
+
+function newItem(list: ListName, parsed: NonNullable<ReturnType<typeof parseItem>>, assignee: string, repeatDays: number, rotate: boolean, createdAt: number) {
   const item: Omit<Item, "id"> = {
     list,
     text: parsed.text,
@@ -191,14 +266,13 @@ export function addItem(list: ListName, input: string, assignee = "", repeatDays
     doneBy: null,
     doneAt: null,
     addedBy: me(),
-    createdAt: Date.now(),
+    createdAt,
     price: list === "shopping" ? (parsed.price ?? 0) : 0,
     repeatDays: list === "chores" ? repeatDays : 0,
     rotate: list === "chores" && repeatDays > 0 && rotate,
     dueAt: null,
   };
-  quietly(setDoc(doc(itemsOf(id)), item));
-  return true;
+  return item;
 }
 
 /**

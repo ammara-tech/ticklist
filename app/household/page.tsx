@@ -4,7 +4,19 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Avatar from "@/components/Avatar";
 import Icon from "@/components/Icon";
-import { createHousehold, leaveHousehold, newInviteLink, readHouseholdName, renameHousehold, setMyName, switchHousehold } from "@/lib/actions";
+import {
+  createHousehold,
+  deleteHouseholdForEveryone,
+  handOver,
+  leaveHousehold,
+  newInviteLink,
+  readHouseholdName,
+  removeMember,
+  renameHousehold,
+  setMyName,
+  switchHousehold,
+} from "@/lib/actions";
+import { isOwner, nextOwner } from "@/lib/household";
 import { signOutUser } from "@/lib/auth";
 import { codeFromInput, inviteLink, inviteMessage } from "@/lib/invite";
 import { memberList } from "@/lib/members";
@@ -14,6 +26,8 @@ import { useApp } from "@/lib/store";
   /household: everything about the household and you.
   The invite link, who's in it, its name, your name, switching between households
   (e.g. home and a holiday house), and leaving.
+  The owner (whoever started it, or was handed it) can also remove people, make someone
+  else the owner, and delete the household for everyone. lib/household.ts has the rules.
 */
 export default function HouseholdPage() {
   const { household, profile, uid } = useApp();
@@ -22,6 +36,9 @@ export default function HouseholdPage() {
   const [copied, setCopied] = useState(false);
   const [confirmNew, setConfirmNew] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // "remove:<id>" or "owner:<id>" while asking "Are you sure?" about one person
+  const [asking, setAsking] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,6 +48,9 @@ export default function HouseholdPage() {
   const link = origin ? inviteLink(origin, household.inviteCode) : "";
   const people = memberList(household, uid);
   const alone = household.memberIds.length === 1;
+  const owner = isOwner(household, uid);
+  const ownerName = household.members[household.createdBy]?.name;
+  const heir = owner && !alone ? household.members[nextOwner(household, uid) ?? ""]?.name : undefined;
 
   async function copy() {
     try {
@@ -119,6 +139,7 @@ export default function HouseholdPage() {
               <span className="flex-1">
                 <span className="block font-semibold">
                   {p.name} {p.id === uid && <span className="font-normal text-ink-soft">(you)</span>}
+                  {p.id === household.createdBy && <span className="ml-2 rounded-full bg-basil-soft px-2 py-0.5 text-xs font-bold text-basil">Owner</span>}
                 </span>
                 {p.joinedAt > 0 && (
                   <span className="block text-xs text-ink-soft">
@@ -126,9 +147,41 @@ export default function HouseholdPage() {
                   </span>
                 )}
               </span>
+              {owner && p.id !== uid && (
+                asking === `remove:${p.id}` || asking === `owner:${p.id}` ? (
+                  <span className="flex flex-wrap items-center justify-end gap-2 text-sm">
+                    <span className="sr-only sm:not-sr-only">{asking.startsWith("remove") ? `Remove ${p.name}?` : `Make ${p.name} the owner?`}</span>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => act(() => (asking.startsWith("remove") ? removeMember(p.id) : handOver(p.id)), () => setAsking(null))}
+                      className={`btn px-3 py-1.5 text-sm ${asking.startsWith("remove") ? "!bg-tomato !text-white" : ""}`}
+                    >
+                      {asking.startsWith("remove") ? "Remove" : "Make owner"}
+                    </button>
+                    <button type="button" onClick={() => setAsking(null)} className="btn-quiet px-3 py-1.5 text-sm">
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <span className="flex flex-wrap justify-end gap-1">
+                    <button type="button" onClick={() => setAsking(`owner:${p.id}`)} className="btn-quiet px-3 py-1.5 text-sm">
+                      Make owner<span className="sr-only">: {p.name}</span>
+                    </button>
+                    <button type="button" onClick={() => setAsking(`remove:${p.id}`)} className="btn-quiet px-3 py-1.5 text-sm !text-tomato hover:!border-tomato">
+                      Remove<span className="sr-only"> {p.name}</span>
+                    </button>
+                  </span>
+                )
+              )}
             </li>
           ))}
         </ul>
+        <p className="mt-3 text-sm text-ink-soft">
+          {owner
+            ? "You're the owner, so you can remove people and hand the household over to someone else."
+            : `${ownerName ?? "The owner"} is the owner and can remove people from the household.`}
+        </p>
       </Panel>
 
       {/* You */}
@@ -167,7 +220,9 @@ export default function HouseholdPage() {
         <div className="flex flex-wrap gap-2">
           {confirmLeave ? (
             <span className="flex flex-wrap items-center gap-2 text-sm">
-              {alone ? "You're the only member, so the household and its lists will be deleted." : "You'll lose access to these lists until someone invites you again."}
+              {alone
+                ? "You're the only member, so the household and its lists will be deleted."
+                : `You'll lose access to these lists until someone invites you again.${heir ? ` ${heir} will become the owner.` : ""}`}
               <button
                 type="button"
                 disabled={busy}
@@ -184,6 +239,29 @@ export default function HouseholdPage() {
             <button type="button" onClick={() => setConfirmLeave(true)} className="btn-quiet !text-tomato hover:!border-tomato">
               Leave {household.name}
             </button>
+          )}
+          {owner && !alone && !confirmLeave && (
+            confirmDelete ? (
+              <span className="flex w-full flex-wrap items-center gap-2 text-sm">
+                Everyone loses {household.name} and its lists. This can&apos;t be undone.
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => act(deleteHouseholdForEveryone, () => router.push("/"))}
+                  className="btn px-3 py-2 !bg-tomato !text-white"
+                >
+                  Delete for everyone
+                </button>
+                <button type="button" onClick={() => setConfirmDelete(false)} className="btn-quiet px-3 py-2">
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button type="button" onClick={() => setConfirmDelete(true)} className="btn-quiet !text-tomato hover:!border-tomato">
+                <Icon name="trash" />
+                Delete for everyone
+              </button>
+            )
           )}
           <button type="button" onClick={() => signOutUser()} className="btn-quiet">
             <Icon name="logout" />
