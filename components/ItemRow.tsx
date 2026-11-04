@@ -3,7 +3,9 @@
 import { useState, type FormEvent } from "react";
 import Avatar from "@/components/Avatar";
 import Icon from "@/components/Icon";
-import { assignChore, editItem, toggleItem } from "@/lib/actions";
+import { assignChore, editItem, setRepeat, toggleItem } from "@/lib/actions";
+import { formatRand } from "@/lib/money";
+import { REPEAT_CHOICES, backWhen, isOpen, isWaiting, readRepeatValue, repeatValue, shortRepeat } from "@/lib/repeat";
 import { timeAgo } from "@/lib/items";
 import { memberList, nameFor } from "@/lib/members";
 import { qtyLabel } from "@/lib/parse";
@@ -30,19 +32,21 @@ export default function ItemRow({
   const [ticking, setTicking] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
-  const checked = item.done || ticking;
-  const label = `${item.text}${item.qty ? `, ${item.qty}` : ""}`;
+  const open = isOpen(item, now);
+  const checked = !open || ticking;
+  const label = `${item.text}${item.qty ? `, ${item.qty}` : ""}${item.price ? `, ${formatRand(item.price)}` : ""}`;
 
   function tick() {
     if (ticking) return;
-    if (item.done) return toggleItem(item);
+    if (!open) return toggleItem(item); // untick
     setTicking(true);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     setTimeout(() => toggleItem(item), reduced ? 0 : 450);
   }
 
   function startEdit() {
-    setDraft(`${item.qty ? `${item.qty} ` : ""}${item.text}`);
+    // The price goes back in as "R32,99", so saving the edit keeps it
+    setDraft(`${item.qty ? `${item.qty} ` : ""}${item.text}${item.price ? ` ${formatRand(item.price).replace(/\u00a0/g, "")}` : ""}`);
     setEditing(true);
   }
 
@@ -82,7 +86,7 @@ export default function ItemRow({
   return (
     <li className={`group flex items-center gap-3 rounded-lg py-1.5 ${ticking ? "just-ticked" : ""}`}>
       <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-1.5">
-        <input type="checkbox" checked={checked} onChange={tick} className="peer sr-only" aria-label={item.done ? `Untick ${label}` : `Tick ${label}`} />
+        <input type="checkbox" checked={checked} onChange={tick} className="peer sr-only" aria-label={!open ? `Untick ${label}` : `Tick ${label}`} />
         <span
           aria-hidden="true"
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition peer-focus-visible:outline peer-focus-visible:outline-3 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-basil ${
@@ -96,19 +100,28 @@ export default function ItemRow({
           )}
         </span>
         <span className="min-w-0 flex-1">
-          <span className={`block text-[17px] font-semibold leading-snug [overflow-wrap:anywhere] ${item.done ? "text-ink-soft line-through decoration-2" : ""}`}>{item.text}</span>
-          {item.done && item.doneAt && (
+          <span className={`block text-[17px] font-semibold leading-snug [overflow-wrap:anywhere] ${!open ? "text-ink-soft line-through decoration-2" : ""}`}>{item.text}</span>
+          {!open && item.doneAt && (
             <span className="block text-xs text-ink-soft">
               {nameFor(item.doneBy, household, me)} · {timeAgo(item.doneAt, now)}
+              {isWaiting(item, now) && item.dueAt && <strong className="font-semibold text-plum"> · {backWhen(item.dueAt, now)}</strong>}
+            </span>
+          )}
+          {open && item.list === "chores" && item.repeatDays > 0 && (
+            <span className="block text-xs font-semibold text-plum">
+              {shortRepeat(item.repeatDays)}
+              {item.rotate ? ", taking turns" : ""}
             </span>
           )}
         </span>
         {item.qty && <span className="shrink-0 rounded-full bg-basil-soft px-2.5 py-0.5 text-sm font-bold text-basil">{qtyLabel(item.qty)}</span>}
+        {item.price > 0 && <span className="shrink-0 text-sm font-semibold text-ink-soft">{formatRand(item.price)}</span>}
       </label>
 
-      {item.list === "chores" && !item.done && <ChoreFor item={item} household={household} me={me} />}
+      {item.list === "chores" && open && <RepeatPicker item={item} />}
+      {item.list === "chores" && open && <ChoreFor item={item} household={household} me={me} />}
 
-      {!item.done && (
+      {open && (
         <button type="button" onClick={startEdit} className="tool h-9 min-w-9" aria-label={`Edit ${item.text}`} title="Edit">
           <Icon name="pencil" className="h-4 w-4" />
         </button>
@@ -117,6 +130,30 @@ export default function ItemRow({
         <Icon name="trash" className="h-4 w-4" />
       </button>
     </li>
+  );
+}
+
+/* How often a chore comes back: a small picker with the repeat icon */
+function RepeatPicker({ item }: { item: Item }) {
+  return (
+    <label className={`tool relative h-9 min-w-9 ${item.repeatDays > 0 ? "!text-plum" : ""}`} title="Repeat">
+      <span className="sr-only">How often {item.text} comes back</span>
+      <Icon name="repeat" className="h-4 w-4" />
+      <select
+        value={repeatValue(item.repeatDays, item.rotate)}
+        onChange={(e) => {
+          const r = readRepeatValue(e.target.value);
+          setRepeat(item, r.repeatDays, r.rotate);
+        }}
+        className="absolute inset-0 cursor-pointer opacity-0"
+      >
+        {REPEAT_CHOICES.map((c) => (
+          <option key={c.value} value={c.value}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

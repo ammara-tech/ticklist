@@ -14,6 +14,10 @@ const item = (over: Partial<Item>): Item => ({
   doneAt: null,
   addedBy: "me",
   createdAt: 1,
+  price: 0,
+  repeatDays: 0,
+  rotate: false,
+  dueAt: null,
   ...over,
 });
 const household = { members: { me: { name: "Ammara", joinedAt: 1 }, lerato: { name: "Lerato", joinedAt: 2 } } };

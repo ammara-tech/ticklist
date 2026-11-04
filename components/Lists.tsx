@@ -5,7 +5,9 @@ import Icon from "@/components/Icon";
 import ItemRow from "@/components/ItemRow";
 import { addItem, clearDone, removeItem, restoreItems } from "@/lib/actions";
 import { categoryInfo } from "@/lib/categories";
-import { counts, doneItems, shoppingAisles, sortedChores } from "@/lib/items";
+import { counts, doneItems, shoppingAisles, shoppingTotals, sortedChores } from "@/lib/items";
+import { formatRand, lastMonths } from "@/lib/money";
+import { REPEAT_CHOICES, readRepeatValue } from "@/lib/repeat";
 import { memberList } from "@/lib/members";
 import { useApp } from "@/lib/store";
 import type { Item, ListName } from "@/lib/types";
@@ -13,7 +15,10 @@ import type { Item, ListName } from "@/lib/types";
 /*
   The two lists, Shopping and Chores, on one screen with tabs.
   - Shopping is sorted into shop aisles (lib/categories.ts), so you walk through the shop once.
-  - Chores show who's doing each one, yours first.
+  - Shopping items can have a price ("2 milk R32,99"): the list shows what's still to buy and
+    what's in the trolley, and "Spent per month" keeps the totals even after you clear the trolley.
+  - Chores show who's doing each one, yours first. A chore can repeat (lib/repeat.ts), and
+    people can take turns.
   - Ticked things move to "Done", where you can untick them or clear them all (with Undo).
   Press "/" to jump to the Add box.
 */
@@ -25,6 +30,7 @@ export default function Lists() {
   const [tab, setTab] = useState<ListName>("shopping");
   const [text, setText] = useState("");
   const [assignee, setAssignee] = useState("");
+  const [repeat, setRepeatChoice] = useState("0");
   const [undo, setUndo] = useState<{ text: string; items: Item[] } | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const input = useRef<HTMLInputElement>(null);
@@ -70,7 +76,8 @@ export default function Lists() {
 
   function add(e: FormEvent) {
     e.preventDefault();
-    if (addItem(tab, text, assignee)) setText("");
+    const r = readRepeatValue(repeat);
+    if (addItem(tab, text, assignee, r.repeatDays, r.rotate)) setText("");
     input.current?.focus();
   }
 
@@ -91,8 +98,12 @@ export default function Lists() {
     offerUndo(`Cleared ${removed.length} ${removed.length === 1 ? "item" : "items"}`, removed);
   }
 
-  const n = counts(items);
-  const done = doneItems(items, tab);
+  const n = counts(items, now);
+  const done = doneItems(items, tab, now);
+  const money = shoppingTotals(items, now);
+  const months = lastMonths(household.spent, now);
+  const topMonth = Math.max(...months.map((m) => m.amount), 1);
+  const clearable = done.filter((i) => !(i.repeatDays > 0)).length;
   const people = memberList(household, uid);
   const rowProps = { household, me: uid, now, onDelete: remove };
 
@@ -146,6 +157,18 @@ export default function Lists() {
           />
           {tab === "chores" && (
             <label className="flex items-center gap-2 text-sm font-semibold">
+              <span className="text-ink-soft">Repeat</span>
+              <select value={repeat} onChange={(e) => setRepeatChoice(e.target.value)} className="field w-auto py-3">
+                {REPEAT_CHOICES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {tab === "chores" && (
+            <label className="flex items-center gap-2 text-sm font-semibold">
               <span className="text-ink-soft">For</span>
               <select value={assignee} onChange={(e) => setAssignee(e.target.value)} className="field w-auto py-3">
                 <option value="">Anyone</option>
@@ -163,14 +186,36 @@ export default function Lists() {
           </button>
         </form>
         <p className="mt-2 text-xs text-ink-soft">
-          {tab === "shopping" ? "Amounts work too: \"500g mince\" or \"bread x2\". Things are sorted into shop aisles for you." : "Tap the initials on a chore to change who's doing it."}{" "}
+          {tab === "shopping"
+            ? "Amounts and prices work too: \"500g mince\", \"bread x2\" or \"2 milk R32,99\". Things are sorted into shop aisles for you."
+            : "Tap the initials on a chore to change who's doing it, or the arrows to make it repeat."}{" "}
           <span className="hidden sm:inline">Press / to add.</span>
         </p>
+
+        {/* What it adds up to, when items have prices */}
+        {tab === "shopping" && (money.toBuy > 0 || money.inTrolley > 0) && (
+          <p className="mt-5 flex flex-wrap gap-x-5 gap-y-1 rounded-2xl border border-line bg-card px-4 py-3 text-sm">
+            <span>
+              Still to buy: <strong>{formatRand(money.toBuy)}</strong>
+              {money.priced < money.open && (
+                <span className="text-ink-soft">
+                  {" "}
+                  ({money.priced} of {money.open} items priced)
+                </span>
+              )}
+            </span>
+            {money.inTrolley > 0 && (
+              <span>
+                In the trolley: <strong>{formatRand(money.inTrolley)}</strong>
+              </span>
+            )}
+          </p>
+        )}
 
         {/* The list */}
         <div className="mt-6 space-y-6">
           {tab === "shopping" ? (
-            shoppingAisles(items).map((aisle) => (
+            shoppingAisles(items, now).map((aisle) => (
               <section key={aisle.id} aria-labelledby={`aisle-${aisle.id}`}>
                 <h2 id={`aisle-${aisle.id}`} className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-ink-soft">
                   <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ background: categoryInfo(aisle.id).colour }} />
@@ -184,9 +229,9 @@ export default function Lists() {
                 </ul>
               </section>
             ))
-          ) : sortedChores(items, uid).length > 0 ? (
+          ) : sortedChores(items, uid, now).length > 0 ? (
             <ul className="ruled rounded-2xl border border-line bg-card px-3">
-              {sortedChores(items, uid).map((item) => (
+              {sortedChores(items, uid, now).map((item) => (
                 <ItemRow key={item.id} item={item} {...rowProps} />
               ))}
             </ul>
@@ -213,16 +258,19 @@ export default function Lists() {
               <summary className="flex cursor-pointer list-none items-center gap-2 py-3 font-bold">
                 <Icon name="chevron" className="h-4 w-4 transition group-open:rotate-90" />
                 {tab === "shopping" ? "In the trolley" : "Done"} <span className="text-ink-soft">({done.length})</span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    clear();
-                  }}
-                  className="ml-auto rounded-lg px-3 py-1 text-sm font-semibold text-basil hover:bg-basil-soft"
-                >
-                  Clear
-                </button>
+                {clearable > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      clear();
+                    }}
+                    title={tab === "chores" ? "Repeating chores stay, waiting to come back" : undefined}
+                    className="ml-auto rounded-lg px-3 py-1 text-sm font-semibold text-basil hover:bg-basil-soft"
+                  >
+                    Clear
+                  </button>
+                )}
               </summary>
               <ul className="ruled pb-2">
                 {done.map((item) => (
@@ -230,6 +278,41 @@ export default function Lists() {
                 ))}
               </ul>
             </details>
+          )}
+
+          {/* Spent per month: what was ticked off with a price, kept even after the trolley is cleared */}
+          {tab === "shopping" && months.some((m) => m.amount > 0) && (
+            <section aria-labelledby="spent-title" className="rounded-2xl border border-line bg-card p-4">
+              <h2 id="spent-title" className="font-bold">
+                Spent per month
+              </h2>
+              <p className="text-xs text-ink-soft">Shopping with a price, ticked off by anyone in the household.</p>
+              <div aria-hidden="true" className="mt-4 flex h-28 items-end gap-2">
+                {months.map((m) => (
+                  <div key={m.key} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
+                    <div className="w-full rounded-t-md bg-basil" style={{ height: `${Math.max(m.amount ? 6 : 2, (m.amount / topMonth) * 100)}%`, opacity: m.amount ? 1 : 0.25 }} />
+                    <span className="text-[11px] text-ink-soft">{m.label}</span>
+                  </div>
+                ))}
+              </div>
+              {/* The same numbers for screen readers (and anyone who wants the exact amounts) */}
+              <table className="mt-3 w-full text-sm">
+                <caption className="sr-only">Spent per month</caption>
+                <tbody>
+                  {months
+                    .filter((m) => m.amount > 0)
+                    .reverse()
+                    .map((m) => (
+                      <tr key={m.key} className="border-t border-line">
+                        <th scope="row" className="py-1 text-left font-normal text-ink-soft">
+                          {m.label} {m.key.slice(0, 4)}
+                        </th>
+                        <td className="py-1 text-right font-semibold">{formatRand(m.amount)}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </section>
           )}
         </div>
       </div>

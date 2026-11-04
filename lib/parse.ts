@@ -5,8 +5,11 @@
     "bread x2"      → Bread, amount 2
     "eggs (dozen)"  → Eggs, amount dozen
     "Bread"         → Bread, no amount
+    "2 milk R32,99" → Milk, amount 2, price R32,99 (a price starts with R: "R32", "R 32.99")
   A number at the end only counts as an amount with "x" or a unit ("Vitamin C 1000" stays as it is).
 */
+
+import { parseRand } from "@/lib/money";
 
 export const MAX_TEXT = 80;
 export const MAX_QTY = 20;
@@ -21,11 +24,29 @@ const bracket = /^(.+?)\s*\(([^)]{1,20})\)$/;
 const tidy = (s: string) => s.replace(/\s+/g, " ").trim();
 const capital = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
-export type Parsed = { text: string; qty: string };
+export type Parsed = { text: string; qty: string; price?: number };
+
+// A price at the start or end: "R32", "R 32,99", "R1 250.50"
+const PRICE = String.raw`R\s?\d{1,3}(?:[ \u00a0]?\d{3})*(?:[.,]\d{1,2})?|R\s?\d+(?:[.,]\d{1,2})?`;
+const priceAtEnd = new RegExp(String.raw`^(.*?)\s+(${PRICE})$`, "i");
+const priceAtStart = new RegExp(String.raw`^(${PRICE})\s+(.+)$`, "i");
 
 export function parseItem(input: string): Parsed | null {
-  const raw = tidy(input);
+  let raw = tidy(input);
   if (!raw) return null;
+
+  // Take a price off the end (or the start) first: "2 milk R32,99"
+  let price: number | undefined;
+  const pe = raw.match(priceAtEnd);
+  const ps = pe ? null : raw.match(priceAtStart);
+  const found = pe ? { rest: pe[1], price: pe[2] } : ps ? { rest: ps[2], price: ps[1] } : null;
+  if (found) {
+    const cents = parseRand(found.price);
+    if (cents !== null && found.rest.trim()) {
+      price = cents;
+      raw = tidy(found.rest);
+    }
+  }
 
   let text = raw;
   let qty = "";
@@ -44,7 +65,8 @@ export function parseItem(input: string): Parsed | null {
   }
   text = capital(tidy(text)).slice(0, MAX_TEXT);
   qty = tidy(qty).slice(0, MAX_QTY);
-  return text ? { text, qty } : null;
+  if (!text) return null;
+  return price ? { text, qty, price } : { text, qty };
 }
 
 /** How an amount is shown next to an item: "2" → "×2", "500g" stays "500g" */

@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { collection, doc, onSnapshot, type Unsubscribe } from "firebase/firestore";
 import { firebase } from "@/lib/firebase";
-import { changesBetween } from "@/lib/items";
+import { changesBetween, readItem } from "@/lib/items";
 import type { Household, Item, Profile } from "@/lib/types";
 
 /*
@@ -123,7 +123,7 @@ function watchHousehold(id: string) {
     { includeMetadataChanges: true },
     (snap) => {
       setPending("items", snap.metadata.hasPendingWrites);
-      const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Item, "id">) }));
+      const items = snap.docs.map((d) => readItem(d.id, d.data()));
       const next = new Map(items.map((i) => [i.id, i]));
       if (!firstItems && state.uid) {
         for (const text of changesBetween(lastItems, next, state.uid, state.household)) addToast(text);

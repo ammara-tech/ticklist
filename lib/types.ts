@@ -4,6 +4,7 @@
   users/{uid}                      your name, the households you're in, and the one you're looking at
   households/{id}                  the household: its name, its members and its current invite code
   households/{id}/items/{itemId}   one thing on the shopping list or the chores list
+                                   (with a price, or a repeat for chores)
   invites/{code}                   an invite link: which household it's for (only works if you know the code)
 
   Times are stored as milliseconds (Date.now()), which keeps sorting and "2 min ago" simple.
@@ -26,6 +27,7 @@ export type Household = {
   members: Record<string, Member>;
   inviteCode: string;
   createdAt: number;
+  spent?: Record<string, number>; // cents ticked off the shopping list per month: { "2026-11": 245050 }
 };
 
 export type Item = {
@@ -40,6 +42,10 @@ export type Item = {
   doneAt: number | null;
   addedBy: string;
   createdAt: number;
+  price: number; // shopping only: cents for this line, 0 = no price
+  repeatDays: number; // chores only: 0 = once, or 1, 2, 3, 7, 14 or 28 days (lib/repeat.ts)
+  rotate: boolean; // chores only: take turns, so it moves to the next person each time
+  dueAt: number | null; // a repeating chore that's done: when it's back on the list
 };
 
 export type Profile = {

@@ -3,6 +3,7 @@ const paths = {
   cart: "M3 4h2l2.4 10.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 7H6.2M9 20h.01M17 20h.01",
   broom: "M14 3l-4.5 9M6 13h8l2 8H4l2-8Zm2 3v5m4-5v5",
   plus: "M12 5v14M5 12h14",
+  repeat: "M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3m13-3v2a4 4 0 0 1-4 4H4",
   check: "m5 12.5 4.5 4.5L19 7.5",
   pencil: "M4 20h4L19 9l-4-4L4 16v4Zm9-13 4 4",
   trash: "M5 7h14M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3",

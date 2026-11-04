@@ -1,44 +1,67 @@
 import type { CategoryId, Household, Item, ListName } from "@/lib/types";
 import { CATEGORIES } from "@/lib/categories";
 import { nameFor } from "@/lib/members";
+import { isOpen } from "@/lib/repeat";
 
 /*
   Turning the raw items into what the screen shows:
   - the shopping list grouped by shop aisle, oldest first inside each aisle
   - the chores list, with chores for you first
-  - the "Done" section, most recently ticked first
+  - the "Done" section, most recently ticked first (a repeating chore waits there until it's due again)
+  - the shopping totals: what's still to buy and what's in the trolley
   - the live messages ("Lerato ticked Milk") when someone else changes the list
 */
 
 export const MAX_ITEMS = 300;
 
-export function openItems(items: Item[], list: ListName) {
-  return items.filter((i) => i.list === list && !i.done);
+export function openItems(items: Item[], list: ListName, now = Date.now()) {
+  return items.filter((i) => i.list === list && isOpen(i, now));
 }
 
-export function doneItems(items: Item[], list: ListName) {
-  return items.filter((i) => i.list === list && i.done).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
+export function doneItems(items: Item[], list: ListName, now = Date.now()) {
+  return items.filter((i) => i.list === list && !isOpen(i, now)).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
+}
+
+/** Prices on the shopping list: still to buy, in the trolley, and how many items have a price */
+export function shoppingTotals(items: Item[], now = Date.now()) {
+  const open = openItems(items, "shopping", now);
+  const done = doneItems(items, "shopping", now);
+  const sum = (list: Item[]) => list.reduce((s, i) => s + (i.price || 0), 0);
+  return { toBuy: sum(open), inTrolley: sum(done), priced: open.filter((i) => i.price > 0).length, open: open.length };
 }
 
 export type Aisle = { id: CategoryId; label: string; colour: string; items: Item[] };
 
-export function shoppingAisles(items: Item[]): Aisle[] {
-  const open = openItems(items, "shopping");
+export function shoppingAisles(items: Item[], now = Date.now()): Aisle[] {
+  const open = openItems(items, "shopping", now);
   return CATEGORIES.map((c) => ({ ...c, items: open.filter((i) => i.category === c.id).sort((a, b) => a.createdAt - b.createdAt) })).filter(
     (a) => a.items.length > 0,
   );
 }
 
 /** Chores for you first, then ones for anyone, then other people's; oldest first inside each */
-export function sortedChores(items: Item[], me: string) {
+export function sortedChores(items: Item[], me: string, now = Date.now()) {
   const rank = (i: Item) => (i.assignee === me ? 0 : i.assignee === "" ? 1 : 2);
-  return openItems(items, "chores").sort((a, b) => rank(a) - rank(b) || a.createdAt - b.createdAt);
+  return openItems(items, "chores", now).sort((a, b) => rank(a) - rank(b) || a.createdAt - b.createdAt);
 }
 
-export function counts(items: Item[]) {
+export function counts(items: Item[], now = Date.now()) {
   return {
-    shopping: openItems(items, "shopping").length,
-    chores: openItems(items, "chores").length,
+    shopping: openItems(items, "shopping", now).length,
+    chores: openItems(items, "chores", now).length,
+  };
+}
+
+/** Items saved before prices and repeats existed don't have those fields: fill them in */
+export function readItem(id: string, data: Record<string, unknown>): Item {
+  const d = data as Partial<Item>;
+  return {
+    ...(d as Omit<Item, "id">),
+    id,
+    price: typeof d.price === "number" && d.price > 0 ? Math.round(d.price) : 0,
+    repeatDays: typeof d.repeatDays === "number" && d.repeatDays > 0 ? d.repeatDays : 0,
+    rotate: d.rotate === true,
+    dueAt: typeof d.dueAt === "number" ? d.dueAt : null,
   };
 }
 
@@ -63,7 +86,8 @@ export function describeChange(before: Item | undefined, after: Item | undefined
     if (after.addedBy === me) return null;
     return `${nameFor(after.addedBy, household, me)} added ${after.text}`;
   }
-  if (before && after && !before.done && after.done) {
+  // Ticked, or a repeating chore that was due again and has been done again
+  if (before && after && after.done && (!before.done || before.doneAt !== after.doneAt)) {
     if (after.doneBy === me) return null;
     return `${nameFor(after.doneBy, household, me)} ticked ${after.text}`;
   }

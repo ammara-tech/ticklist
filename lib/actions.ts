@@ -8,6 +8,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
   setDoc,
   updateDoc,
   writeBatch,
@@ -17,6 +18,8 @@ import { categorize } from "@/lib/categories";
 import { makeInviteCode, isInviteCode } from "@/lib/invite";
 import { MAX_NAME } from "@/lib/members";
 import { parseItem } from "@/lib/parse";
+import { monthKey } from "@/lib/money";
+import { isOpen, tickChanges } from "@/lib/repeat";
 import { getApp, reportProblem } from "@/lib/store";
 import type { Household, Invite, Item, ListName } from "@/lib/types";
 
@@ -173,8 +176,8 @@ export function setMyName(name: string) {
 
 const itemsOf = (id: string) => collection(db(), "households", id, "items");
 
-/** Adds what was typed ("2 milk") to a list. Returns false if there was nothing to add. */
-export function addItem(list: ListName, input: string, assignee = "") {
+/** Adds what was typed ("2 milk R32") to a list. Returns false if there was nothing to add. */
+export function addItem(list: ListName, input: string, assignee = "", repeatDays = 0, rotate = false) {
   const id = householdId();
   const parsed = parseItem(input);
   if (!id || !parsed) return false;
@@ -189,16 +192,45 @@ export function addItem(list: ListName, input: string, assignee = "") {
     doneAt: null,
     addedBy: me(),
     createdAt: Date.now(),
+    price: list === "shopping" ? (parsed.price ?? 0) : 0,
+    repeatDays: list === "chores" ? repeatDays : 0,
+    rotate: list === "chores" && repeatDays > 0 && rotate,
+    dueAt: null,
   };
   quietly(setDoc(doc(itemsOf(id)), item));
   return true;
 }
 
+/**
+ * Ticks or unticks. Ticking a repeating chore sends it to Done until it's due again (and to the
+ * next person, when taking turns). Ticking a priced shopping item adds it to this month's spending;
+ * unticking takes it off again.
+ */
 export function toggleItem(item: Item) {
   const id = householdId();
+  const household = getApp().household;
+  if (!id || !household) return;
+  const now = Date.now();
+  const batch = writeBatch(db());
+  if (isOpen(item, now)) {
+    batch.update(doc(itemsOf(id), item.id), tickChanges(item, me(), now, household));
+    if (item.list === "shopping" && item.price > 0) {
+      batch.update(doc(db(), "households", id), { [`spent.${monthKey(now)}`]: increment(item.price) });
+    }
+  } else {
+    batch.update(doc(itemsOf(id), item.id), { done: false, doneBy: null, doneAt: null, dueAt: null });
+    if (item.list === "shopping" && item.price > 0 && item.doneAt) {
+      batch.update(doc(db(), "households", id), { [`spent.${monthKey(item.doneAt)}`]: increment(-item.price) });
+    }
+  }
+  quietly(batch.commit());
+}
+
+/** How often a chore comes back, and whether people take turns */
+export function setRepeat(item: Item, repeatDays: number, rotate: boolean) {
+  const id = householdId();
   if (!id) return;
-  const done = !item.done;
-  quietly(updateDoc(doc(itemsOf(id), item.id), { done, doneBy: done ? me() : null, doneAt: done ? Date.now() : null }));
+  quietly(updateDoc(doc(itemsOf(id), item.id), { repeatDays, rotate: repeatDays > 0 && rotate, ...(repeatDays === 0 ? { dueAt: null } : {}) }));
 }
 
 export function editItem(item: Item, input: string) {
@@ -209,7 +241,7 @@ export function editItem(item: Item, input: string) {
     updateDoc(doc(itemsOf(id), item.id), {
       text: parsed.text,
       qty: parsed.qty,
-      ...(item.list === "shopping" ? { category: categorize(parsed.text) } : {}),
+      ...(item.list === "shopping" ? { category: categorize(parsed.text), price: parsed.price ?? 0 } : {}),
     }),
   );
 }
@@ -237,11 +269,14 @@ export function restoreItems(items: Item[]) {
   quietly(batch.commit());
 }
 
-/** Clears the "Done" section of a list. Returns what was cleared, for Undo. */
+/**
+ * Clears the "Done" section of a list. Returns what was cleared, for Undo.
+ * Repeating chores stay: they're waiting to come back. What was spent stays counted.
+ */
 export function clearDone(list: ListName): Item[] {
   const id = householdId();
   if (!id) return [];
-  const done = getApp().items.filter((i) => i.list === list && i.done);
+  const done = getApp().items.filter((i) => i.list === list && i.done && !(i.repeatDays > 0));
   if (done.length === 0) return [];
   const batch = writeBatch(db());
   for (const item of done) batch.delete(doc(itemsOf(id), item.id));
