@@ -83,7 +83,7 @@ export default function LoginScreen() {
           TickList
         </p>
         <DemoList />
-        <h1 className="relative mt-auto max-w-md text-5xl font-extrabold leading-[1.05] tracking-tight">One list for the whole house.</h1>
+        <p className="relative mt-auto max-w-md text-5xl font-extrabold leading-[1.05] tracking-tight">One list for the whole house.</p>
         <p className="relative mt-5 max-w-md text-lg text-white/85">
           Shopping and chores, shared with your family or flatmates. Tick off the milk and it&apos;s gone from everyone&apos;s phone. Works with no signal in the shop.
         </p>
@@ -105,7 +105,7 @@ export default function LoginScreen() {
               <strong>You&apos;ve been invited to a household.</strong> Sign in or create an account, and you&apos;ll join it straight after.
             </p>
           )}
-          <h2 className="text-3xl font-extrabold tracking-tight">{mode === "signIn" ? "Welcome back" : "Create your account"}</h2>
+          <h1 className="text-3xl font-extrabold tracking-tight">{mode === "signIn" ? "Welcome back" : "Create your account"}</h1>
           <p className="mt-2 text-ink-soft">{mode === "signIn" ? "Sign in to see your lists." : "It's free, and takes a minute."}</p>
 
           <button type="button" disabled={busy} onClick={() => run(signInGoogle)} className="btn-quiet mt-8 w-full py-3">
