@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { endDemo } from "@/lib/demo";
+import { firebase } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import Avatar from "@/components/Avatar";
 import Icon from "@/components/Icon";
@@ -263,7 +265,7 @@ export default function HouseholdPage() {
               </button>
             )
           )}
-          <button type="button" onClick={() => signOutUser()} className="btn-quiet">
+          <button type="button" onClick={() => (firebase().auth.currentUser?.isAnonymous ? endDemo() : signOutUser())} className="btn-quiet">
             <Icon name="logout" />
             Sign out
           </button>

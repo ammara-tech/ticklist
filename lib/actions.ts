@@ -357,3 +357,53 @@ export function clearDone(list: ListName): Item[] {
   quietly(batch.commit());
   return done;
 }
+
+// ---------- Try the demo ----------
+
+/** For a new demo (lib/demo.ts): a household with a shopping list (some with prices) and chores that repeat */
+export async function seedDemo() {
+  const id = await createHousehold("The demo house");
+  const uid = me();
+  const batch = writeBatch(db());
+  let n = Date.now();
+  const add = (list: ListName, input: string, repeatDays = 0) => {
+    for (const parsed of parseMany(input)) batch.set(doc(itemsOf(id)), newItem(list, parsed, list === "chores" ? uid : "", repeatDays, false, n++));
+  };
+  add("shopping", "2 milk R32, bread R18, 6 eggs, 1kg rice R45, apples, coffee R89, toothpaste");
+  add("chores", "Take out the bins", 7);
+  add("chores", "Water the plants", 3);
+  add("chores", "Wash the car");
+  quietly(batch.commit());
+}
+
+/**
+ * Leaves every household (the last person out deletes it, with its lists and invite link) and
+ * empties the profile. Used when a demo ends. Needs a connection, so it waits.
+ */
+export async function deleteEverything() {
+  const uid = me();
+  for (const id of getApp().profile.households) {
+    const ref = doc(db(), "households", id);
+    const snap = await getDoc(ref).catch(() => null);
+    if (!snap?.exists()) continue;
+    const household = { id, ...(snap.data() as Omit<Household, "id">) };
+    const others = household.memberIds.filter((m) => m !== uid);
+    if (others.length === 0) {
+      const items = await getDocs(collection(ref, "items"));
+      const batch = writeBatch(db());
+      items.docs.forEach((d) => batch.delete(d.ref));
+      batch.delete(doc(db(), "invites", household.inviteCode));
+      batch.delete(ref);
+      await batch.commit();
+    } else {
+      await updateDoc(ref, {
+        memberIds: arrayRemove(uid),
+        [`members.${uid}`]: deleteField(),
+        [`atShop.${uid}`]: deleteField(),
+        ...(isOwner(household, uid) ? { createdBy: nextOwner(household, uid) } : {}),
+      });
+    }
+  }
+  // The profile is emptied rather than deleted (the rules only allow writing it, with these fields)
+  await setDoc(doc(db(), "users", uid), { name: "Guest", households: [], current: null });
+}

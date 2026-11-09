@@ -50,6 +50,9 @@ Built with Next.js, TypeScript, Tailwind CSS and Firebase (Authentication and Cl
 - **Installable.** "Add to Home screen" opens it full screen, like an app.
 - **Sign in** with email and password (with a reset email) or Google. If the browser blocks Google's pop-up window, the whole page goes to Google instead. Sign-in errors say what went wrong in plain words, with Firebase's error code underneath. Light and dark themes. Press **/** to add.
 - **Fast first load:** a new visitor gets the sign-in screen straight from the server, without waiting for Firebase to load. Someone who has signed in on the device before sees the loading screen instead while Firebase checks (a small hint saved on the device decides which). Google's sign-in helper only loads when someone presses **Continue with Google**, not on every visit.
+- **Try the demo**, with no account: you're signed in as a guest with a made-up household, a shopping list with
+  prices and chores that repeat. A strip at the top says it's a demo, and **End the demo** deletes the household and
+  the guest account. A link ending in `?demo` puts the demo button at the top of the sign-in screen.
 
 ## Design
 A kitchen notepad stuck to the fridge: warm paper, a basil-green tick for "done", a mustard flash when you tick
@@ -77,6 +80,13 @@ tests/            Unit tests (npm test)
 ```
 
 ## How the important parts work
+
+**Try the demo** (`lib/demo.ts`). The guest is signed in with Firebase's anonymous sign-in, so they get their own
+private account and the same security rules protect them as anyone else. The first time a guest has no household, the
+app makes "The demo house" with example items (once: a note on the device remembers). Ending the demo leaves every
+household (deleting it if nobody else is in it, as usual), then deletes the guest account. To show everything syncing,
+open the invite link in another browser, sign in there and tick something off.
+
 **Live updates.** `lib/store.ts` listens to your profile, your household and its items with Firestore's
 `onSnapshot`. Whenever anyone changes something, Firestore sends the new version and every screen re-draws.
 `changesBetween()` in `lib/items.ts` compares the list before and after, to write messages like "Lerato added
@@ -135,7 +145,7 @@ them on every push (`.github/workflows/tests.yml`).
 
 ## Setup (run it yourself)
 1. **Firebase:** create a project at [console.firebase.google.com](https://console.firebase.google.com).
-   - Authentication → Get started → turn on **Email/Password** and **Google**.
+   - Authentication → Get started → turn on **Email/Password**, **Google** and **Anonymous** (for Try the demo).
    - Firestore Database → Create database (production mode).
    - Firestore Database → **Rules**: paste in `firestore.rules` and press **Publish**.
    - Project settings → General → Your apps → add a **Web app** to get its settings.
@@ -159,6 +169,8 @@ These are public by design: they say which Firebase project to use, they don't u
 the lists is `firestore.rules`.
 
 ## Known gaps
+- **Demos that are never ended stay in the database.** If a guest just closes the tab, their example household and
+  guest account stay in Firebase. It's small, and the free plan has plenty of room, but nothing cleans it up automatically yet.
 - **The security rules aren't in the automatic tests.** They'd need the Firebase emulator; they're tested by hand.
 - **No push notifications.** You see "Lerato ticked Milk" only while the app is open.
 - **Invite links don't expire** on their own. A member can press "New link" to retire the old one.
