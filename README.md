@@ -55,13 +55,23 @@ Built with Next.js, TypeScript, Tailwind CSS and Firebase (Authentication and Cl
   the guest account. A link ending in `?demo` puts the demo button at the top of the sign-in screen.
 
 ## Design
-A kitchen notepad stuck to the fridge: warm paper, a basil-green tick for "done", a mustard flash when you tick
-something, and plum for chores so the two lists never get mixed up. Ticking draws the tick and flashes for a
-moment before the item moves down, so you can see it worked. Tick boxes are big enough to hit with a thumb in
-the shop. Animations switch off for people who've asked their device to reduce motion.
+Notes stuck to a fridge door: pale fridge enamel around, the list on a **sunny yellow sticky note** held up by two
+magnets, and **ticks in red pen**, like a list someone checked off at the shop. A mustard flash when you tick
+something, and plum for chores so the two lists never get mixed up. The household's name and the big headings are
+**handwritten**. Ticking draws the tick and flashes for a moment before the item moves down, so you can see it
+worked. Tick boxes are big enough to hit with a thumb in the shop. Animations switch off for people who've asked
+their device to reduce motion. Dark mode is the fridge at night.
 
-The sign-in screen shows three made-up cards (shopping, chores and an invite) so visitors see what the app does
-before signing up. Font: [Bricolage Grotesque](https://fonts.google.com/specimen/Bricolage+Grotesque).
+**The sign-in screen is the fridge door** (`components/LoginScreen.tsx`): the form is a yellow sticky note with two
+magnets, next to a shopping list being ticked off in red pen (someone else's tick arriving "just now") and a green
+"Try the demo" note. On a phone, the sign-in note comes first.
+
+**Inside**, there's no bar across the top: the household's name is written at the top of the page, and the list
+fills a sticky note. On a phone, a bar at the bottom switches between the lists and the household, within reach of
+your thumb in the shop.
+
+Fonts: [Nunito](https://fonts.google.com/specimen/Nunito) for everything, and
+[Caveat](https://fonts.google.com/specimen/Caveat) for the handwritten headings.
 
 ## Tech stack
 Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Firebase Authentication, Cloud Firestore,

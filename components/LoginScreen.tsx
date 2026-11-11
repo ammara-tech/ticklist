@@ -8,9 +8,10 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { authErrorMessage, errorCode, finishRedirectSignIn, resetPassword, signInDemo, signInEmail, signInGoogle, signUpEmail } from "@/lib/auth";
 
 /*
-  The sign-in screen. On a laptop the green side shows three small example cards
-  (shopping, chores and inviting), so people see what TickList does before they sign up.
-  Someone who opened an invite link sees a note that they'll join after signing in.
+  The sign-in screen is a fridge door: the form is a yellow sticky note held up by magnets,
+  next to a shopping list being ticked off and a green "Try the demo" note. On a phone the
+  sign-in note comes first. Someone who opened an invite link sees a note that they'll join
+  after signing in.
 */
 export default function LoginScreen() {
   const [mode, setMode] = useState<"signIn" | "create">("signIn");
@@ -26,15 +27,6 @@ export default function LoginScreen() {
     setFromDemoLink(new URLSearchParams(window.location.search).has("demo"));
   }, []);
 
-  const demoBox = (
-    <div className="rounded-xl border border-dashed border-basil/40 bg-basil-soft p-4">
-      <p className="font-bold">Just looking?</p>
-      <p className="mt-1 text-sm text-ink-soft">Try TickList with a made-up household, a shopping list and chores. No account needed, and everything is deleted when you end the demo.</p>
-      <button type="button" disabled={busy} onClick={() => run(signInDemo)} className="btn mt-3 w-full py-2.5">
-        Try the demo
-      </button>
-    </div>
-  );
   const invited = usePathname() === "/join"; // the same on the server and in the browser
 
   // If Google sign-in went the full-page way and failed, say why when the page comes back.
@@ -75,53 +67,59 @@ export default function LoginScreen() {
     });
   }
 
+  // "Try the demo" is a green note on the fridge
+  const demoBox = (
+    <div className="relative rounded-sm bg-[#d9f2d0] px-5 pb-5 pt-7 text-[#1f2a1a] shadow-[0_22px_40px_-22px_rgba(0,0,0,0.45)] dark:bg-[#26381f] dark:text-[#e3f2dc] sm:rotate-[1.5deg]">
+      <span aria-hidden="true" className="magnet left-1/2 -ml-[13px] bg-[#f2c14e]" />
+      <p className="font-hand text-3xl leading-none">Just looking?</p>
+      <p className="mt-2 text-sm">Try TickList with a made-up household, a shopping list and chores. No account needed, and everything is deleted when you end the demo.</p>
+      <button type="button" disabled={busy} onClick={() => run(signInDemo)} className="btn mt-3 w-full py-2.5">
+        Try the demo
+      </button>
+    </div>
+  );
+
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      <aside className="relative hidden overflow-hidden bg-[#1f5c3a] p-12 text-white lg:flex lg:flex-col">
-        <p className="flex items-center gap-2 text-2xl font-extrabold">
-          <Logo className="h-9 w-9" />
+    <div className="fridge relative min-h-screen overflow-hidden">
+      {/* The fridge handle, down the right-hand side (decoration) */}
+      <span aria-hidden="true" className="absolute right-6 top-1/4 hidden h-72 w-3 rounded-full bg-gradient-to-b from-[#c9d1cf] via-white to-[#b7c0be] shadow-md dark:from-[#3a3f40] dark:via-[#5a6062] dark:to-[#2c3031] lg:block" />
+
+      <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-5">
+        <p className="flex items-center gap-2 text-xl font-extrabold">
+          <Logo className="h-9 w-9 -rotate-6" />
           TickList
         </p>
-        <DemoList />
-        <p className="relative mt-auto max-w-md text-5xl font-extrabold leading-[1.05] tracking-tight">One list for the whole house.</p>
-        <p className="relative mt-5 max-w-md text-lg text-white/85">
-          Shopping and chores, shared with your family or flatmates. Tick off the milk and it&apos;s gone from everyone&apos;s phone. Works with no signal in the shop.
-        </p>
-      </aside>
+        <ThemeToggle />
+      </div>
 
-      <main className="flex flex-col px-5 py-6 sm:px-10">
-        <div className="flex items-center justify-between">
-          <p className="flex items-center gap-2 text-xl font-extrabold lg:invisible">
-            <Logo />
-            TickList
-          </p>
-          <ThemeToggle />
-        </div>
-
-        <div className="m-auto w-full max-w-sm py-10">
+      <div className="mx-auto grid max-w-5xl items-start gap-12 px-5 pb-16 pt-4 lg:grid-cols-[1fr_minmax(0,26rem)] lg:pt-10">
+        {/* The sign-in form is a sticky note, held up by two magnets */}
+        <main className="sticky-note order-1 rounded-sm px-6 pb-8 pt-10 sm:px-8 lg:order-2 lg:rotate-[1deg]">
+          <span aria-hidden="true" className="magnet left-8 bg-[#d6452a]" />
+          <span aria-hidden="true" className="magnet right-8 bg-[#3a7bd5]" />
           {fromDemoLink && <div className="mb-8">{demoBox}</div>}
           {invited && (
-            <p className="mb-6 rounded-xl border border-basil/40 bg-basil-soft px-4 py-3 text-sm">
+            <p className="mb-6 rounded-xl border border-basil/40 bg-card px-4 py-3 text-sm">
               <strong>You&apos;ve been invited to a household.</strong> Sign in or create an account, and you&apos;ll join it straight after.
             </p>
           )}
-          <h1 className="text-3xl font-extrabold tracking-tight">{mode === "signIn" ? "Welcome back" : "Create your account"}</h1>
-          <p className="mt-2 text-ink-soft">{mode === "signIn" ? "Sign in to see your lists." : "It's free, and takes a minute."}</p>
+          <h1 className="font-hand text-5xl leading-none">{mode === "signIn" ? "Welcome back!" : "Make an account"}</h1>
+          <p className="mt-3 text-ink-soft">{mode === "signIn" ? "Sign in to see your lists." : "It's free, and takes a minute."}</p>
 
-          <button type="button" disabled={busy} onClick={() => run(signInGoogle)} className="btn-quiet mt-8 w-full py-3">
+          <button type="button" disabled={busy} onClick={() => run(signInGoogle)} className="btn-quiet mt-6 w-full py-3">
             <Icon name="google" />
             Continue with Google
           </button>
 
-          <p className="my-6 flex items-center gap-3 text-sm text-ink-soft before:h-px before:flex-1 before:bg-line after:h-px after:flex-1 after:bg-line">or</p>
+          <p className="my-5 flex items-center gap-3 text-sm text-ink-soft before:h-px before:flex-1 before:bg-note-edge after:h-px after:flex-1 after:bg-note-edge">or</p>
 
           <form onSubmit={submit} className="space-y-4">
-            <label className="block text-sm font-semibold">
+            <label className="block text-sm font-bold">
               Email
               <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="field mt-1 font-normal" />
             </label>
             <div>
-              <label htmlFor="password" className="text-sm font-semibold">
+              <label htmlFor="password" className="text-sm font-bold">
                 Password
               </label>
               <div className="relative mt-1">
@@ -139,20 +137,20 @@ export default function LoginScreen() {
                   type="button"
                   onClick={() => setShow((s) => !s)}
                   aria-pressed={show}
-                  className="absolute inset-y-0 right-2 my-auto h-9 rounded-lg px-3 text-sm font-semibold text-basil hover:bg-basil-soft"
+                  className="absolute inset-y-0 right-2 my-auto h-9 rounded-lg px-3 text-sm font-bold text-basil hover:bg-basil-soft"
                 >
                   {show ? "Hide" : "Show"}
                 </button>
               </div>
             </div>
             {error && (
-              <div role="alert" className="text-sm font-semibold text-tomato">
+              <div role="alert" className="text-sm font-bold text-tomato">
                 <p>{error.text}</p>
-                {error.code && <p className="mt-1 text-xs font-normal opacity-70">Error code: {error.code}</p>}
+                {error.code && <p className="mt-1 text-xs font-normal opacity-80">Error code: {error.code}</p>}
               </div>
             )}
             {notice && (
-              <p role="status" className="text-sm text-basil">
+              <p role="status" className="text-sm font-bold text-basil">
                 {notice}
               </p>
             )}
@@ -162,12 +160,12 @@ export default function LoginScreen() {
           </form>
 
           {mode === "signIn" && (
-            <button type="button" onClick={forgot} className="mt-4 text-sm font-semibold text-basil hover:underline">
+            <button type="button" onClick={forgot} className="mt-4 text-sm font-bold text-basil hover:underline">
               Forgot your password?
             </button>
           )}
 
-          <p className="mt-8 text-ink-soft">
+          <p className="mt-6 text-ink-soft">
             {mode === "signIn" ? "New to TickList? " : "Already have an account? "}
             <button
               type="button"
@@ -181,131 +179,50 @@ export default function LoginScreen() {
               {mode === "signIn" ? "Create an account" : "Sign in"}
             </button>
           </p>
-          {!fromDemoLink && <div className="mt-6">{demoBox}</div>}
           <p className="mt-6 text-sm text-ink-soft">Only the people in your household can see your lists. They&apos;re stored in Google&apos;s Firebase database.</p>
+        </main>
+
+        {/* The rest of the fridge door: what TickList is, a shopping list someone is ticking off, and the demo */}
+        <div className="order-2 lg:order-1">
+          <p className="font-hand text-5xl leading-[0.95] sm:text-6xl">One list for the whole house.</p>
+          <p className="mt-4 max-w-md text-lg text-ink-soft">
+            Shopping and chores, shared with your family or flatmates. Tick off the milk and it&apos;s gone from everyone&apos;s phone. Works with no signal in the shop.
+          </p>
+          <FridgeList />
+          {!fromDemoLink && <div className="mt-10 max-w-sm">{demoBox}</div>}
         </div>
-      </main>
+      </div>
     </div>
   );
 }
 
 /*
-  Three made-up cards overlapping like notes on a fridge, as a preview on the sign-in screen.
-  Each shows something TickList does:
-    back:   the shopping list sorted into shop aisles, with someone else's tick arriving live
-    middle: the chores list, with who's doing each one
-    front:  inviting the household with a link, and still working offline
-  Decorative only: screen readers skip it.
+  A shopping list on lined paper, as a preview on the sign-in screen: some things ticked off in
+  red pen, and one ticked by someone else just now. Decorative only: screen readers skip it.
 */
-const paper = "rounded-2xl bg-[#f7f3ea] p-4 text-[#1d2620] shadow-[0_24px_50px_-18px_rgba(0,0,0,0.55)]";
-
-function Tick({ done, colour = "#2b7349" }: { done: boolean; colour?: string }) {
+function FridgeList() {
+  const items: [string, boolean, string?][] = [
+    ["Milk (2 L)", true],
+    ["Bread", true, "Thabo, just now"],
+    ["Eggs", false],
+    ["Washing powder", false],
+    ["Tomatoes", false],
+  ];
   return (
-    <span
-      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-white"
-      style={done ? { borderColor: colour, background: colour } : { borderColor: "#c9c1ae" }}
-    >
-      {done && <Icon name="check" className="h-3.5 w-3.5" />}
-    </span>
-  );
-}
-
-function Face({ letter, colour }: { letter: string; colour: string }) {
-  return (
-    <span className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ background: colour }}>
-      {letter}
-    </span>
-  );
-}
-
-function DemoList() {
-  return (
-    <div aria-hidden="true" className="relative mx-auto mt-8 h-[400px] w-full max-w-[520px] select-none">
-      {/* Shopping, sorted into aisles */}
-      <div className={`${paper} absolute left-0 top-0 w-[270px] rotate-[-6deg]`}>
-        <p className="flex items-center justify-between text-sm font-bold">
-          <span className="flex items-center gap-1.5">
-            <Icon name="cart" className="h-4 w-4 text-[#2b7349]" />
-            Shopping
-          </span>
-          <span className="flex items-center gap-1 text-[11px] text-[#2b7349]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#2b7349]" />
-            Live
-          </span>
-        </p>
-        {(
-          [
-            ["Fruit & veg", "#3f8f4f", [["Tomatoes", "", false], ["Avos", "×3", false]]],
-            ["Dairy & eggs", "#4a7fb8", [["Milk", "×2", true], ["Eggs", "dozen", false]]],
-            ["Meat & fish", "#b8473f", [["Boerewors", "1kg", false]]],
-          ] as [string, string, [string, string, boolean][]][]
-        ).map(([aisle, colour, rows]) => (
-          <div key={aisle} className="mt-3">
-            <p className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-[#55615a]">
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: colour }} />
-              {aisle}
-            </p>
-            <ul className="ruled">
-              {rows.map(([text, qty, done]) => (
-                <li key={text} className="flex items-center gap-2 py-1.5 text-sm">
-                  <Tick done={done} />
-                  <span className={`flex-1 font-semibold ${done ? "text-[#55615a] line-through" : ""}`}>{text}</span>
-                  {qty && <span className="rounded-full bg-[#e1f0e5] px-1.5 text-[10px] font-bold text-[#2b7349]">{qty}</span>}
-                </li>
-              ))}
-            </ul>
-          </div>
+    <div aria-hidden="true" className="relative mt-10 hidden w-72 -rotate-2 rounded-sm bg-white px-6 pb-6 pt-8 text-[#2a2416] shadow-[0_22px_40px_-22px_rgba(0,0,0,0.45)] dark:bg-[#2b2a22] dark:text-[#f4eedb] sm:block">
+      <span className="magnet left-1/2 -ml-[13px] bg-[#6d4c8d]" />
+      <p className="font-hand text-3xl">Shopping</p>
+      <ul className="mt-2">
+        {items.map(([text, done, who]) => (
+          <li key={text} className="flex items-center gap-3 border-b border-[#9cc3e6]/60 py-1.5">
+            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 ${done ? "border-[#b5321c] text-[#b5321c] dark:border-[#ff9a7c] dark:text-[#ff9a7c]" : "border-current opacity-40"}`}>
+              {done && "✓"}
+            </span>
+            <span className={done ? "line-through opacity-60" : ""}>{text}</span>
+            {who && <span className="ml-auto text-xs font-bold text-[#b5321c] dark:text-[#ff9a7c]">{who}</span>}
+          </li>
         ))}
-        <p className="mt-3 rounded-full bg-[#1d2620] px-3 py-1.5 text-center text-[11px] font-semibold text-[#f7f3ea]">Lerato ticked Milk</p>
-      </div>
-
-      {/* Chores, with who's doing each one */}
-      <div className={`${paper} absolute left-[44%] top-[16px] w-[250px] rotate-[4deg]`}>
-        <p className="flex items-center gap-1.5 text-sm font-bold">
-          <Icon name="broom" className="h-4 w-4 text-[#6d4c8d]" />
-          Chores
-        </p>
-        <ul className="ruled mt-2">
-          {(
-            [
-              ["Take the bins out", "L", "#c0812b", false],
-              ["Wash the dishes", "T", "#4a7fb8", true],
-              ["Water the plants", "", "", false],
-              ["Feed the dog", "A", "#2f7d4f", false],
-            ] as [string, string, string, boolean][]
-          ).map(([text, who, colour, done]) => (
-            <li key={text} className="flex items-center gap-2 py-1.5 text-sm">
-              <Tick done={done} colour="#6d4c8d" />
-              <span className={`flex-1 font-semibold ${done ? "text-[#55615a] line-through" : ""}`}>{text}</span>
-              {who ? (
-                <Face letter={who} colour={colour} />
-              ) : (
-                <span className="rounded-full border border-dashed border-[#6d4c8d]/60 px-1.5 text-[10px] font-semibold text-[#6d4c8d]">Anyone</span>
-              )}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Invite with a link, works offline */}
-      <div className={`${paper} absolute bottom-0 left-[30%] w-[240px] rotate-[-2deg]`}>
-        <p className="text-sm font-bold">The Dlamini home</p>
-        <div className="mt-2 flex -space-x-1.5">
-          <Face letter="L" colour="#c0812b" />
-          <Face letter="T" colour="#4a7fb8" />
-          <Face letter="A" colour="#2f7d4f" />
-          <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-dashed border-[#c9c1ae] text-xs font-bold text-[#55615a]">+</span>
-        </div>
-        <p className="mt-2 truncate rounded-lg border border-[#e2dccd] bg-white px-2 py-1 font-mono text-[10px] text-[#55615a]">ticklist…/join?code=K7QXM2PA9WRT</p>
-        <p className="mt-2 flex items-center justify-center gap-1.5 rounded-lg bg-[#2b7349] py-1.5 text-xs font-bold text-white">
-          <Icon name="whatsapp" className="h-3.5 w-3.5" />
-          Invite on WhatsApp
-        </p>
-        <p className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-[#b93a12]">
-          <Icon name="cloudOff" className="h-3.5 w-3.5" />
-          Offline: 2 ticks will sync when you&apos;re back
-        </p>
-      </div>
+      </ul>
     </div>
   );
 }

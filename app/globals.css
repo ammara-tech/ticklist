@@ -1,44 +1,50 @@
 @import "tailwindcss";
 
 /*
-  TickList's look: a kitchen notepad stuck to the fridge.
-  Warm paper, a basil-green tick for "done", mustard for the moment you tick something,
-  and plum for chores so the two lists never get mixed up.
-  Dark mode is the same notepad at night, for late-night "we're out of milk" moments.
+  TickList's look: notes stuck to a fridge door.
+  Pale fridge enamel around, sunny sticky-note yellow for the list, and ticks in red pen,
+  like a list someone checked off at the shop. Mustard flashes when you tick something,
+  and plum is for chores so the two lists never get mixed up. Headings are handwritten.
+  Dark mode is the fridge at night, lit by the fridge light.
 */
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme {
-  --color-page: #f7f3ea; /* the notepad */
-  --color-card: #ffffff; /* lists, panels and forms */
-  --color-ink: #1d2620; /* text */
-  --color-ink-soft: #55615a; /* quieter text (passes AA on page and card) */
-  --color-line: #e2dccd;
-  --color-basil: #2b7349; /* buttons, links, the tick */
+  --color-page: #eaf0ee; /* the fridge door */
+  --color-card: #fffdf3; /* lists, panels and forms */
+  --color-note: #fff1a6; /* the sticky note */
+  --color-note-edge: #e9d26a;
+  --color-ink: #2a2416; /* text */
+  --color-ink-soft: #5b5440; /* quieter text (passes AA on page, card and the note) */
+  --color-line: #e3dcbf;
+  --color-basil: #b5321c; /* red pen: buttons, links, the tick */
   --color-on-basil: #ffffff;
-  --color-basil-soft: #e1f0e5;
+  --color-basil-soft: #fbe4dc;
   --color-mustard: #f2c14e; /* the flash when you tick something */
   --color-plum: #6d4c8d; /* chores */
   --color-plum-soft: #efe7f6;
-  --color-tomato: #b93a12; /* delete, leave, problems */
+  --color-tomato: #9b2c0f; /* delete, leave, problems */
 
-  --font-sans: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-nunito, ui-rounded), ui-sans-serif, system-ui, sans-serif;
+  --font-hand: var(--font-caveat, "Comic Sans MS"), "Segoe Print", cursive; /* handwritten headings */
 }
 
 :root[data-theme="dark"] {
-  --color-page: #121814;
-  --color-card: #1b231e;
-  --color-ink: #e9efe9;
-  --color-ink-soft: #a3b0a7;
-  --color-line: #2e3a32;
-  --color-basil: #72d394;
-  --color-on-basil: #0f1a13;
-  --color-basil-soft: #1f3427;
+  --color-page: #16191a;
+  --color-card: #22231c;
+  --color-note: #3a3418;
+  --color-note-edge: #5c5228;
+  --color-ink: #f4eedb;
+  --color-ink-soft: #c2b99e;
+  --color-line: #3a3829;
+  --color-basil: #ff9a7c;
+  --color-on-basil: #16191a;
+  --color-basil-soft: #3d2219;
   --color-mustard: #e0b13f;
   --color-plum: #c6a8ea;
   --color-plum-soft: #2c2438;
-  --color-tomato: #ff9470;
+  --color-tomato: #ffb39c;
   color-scheme: dark;
 }
 
@@ -182,4 +188,37 @@ body {
 html[data-signed-in] .gate-login,
 html:not([data-signed-in]) .gate-splash {
   display: none;
+}
+
+/* Handwritten headings, like a note on the fridge */
+.font-hand {
+  font-family: var(--font-hand);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* A sticky note: yellow, with a slightly darker strip where it sticks */
+.sticky-note {
+  position: relative;
+  background: var(--color-note);
+  background-image: linear-gradient(to bottom, color-mix(in srgb, var(--color-note-edge) 55%, transparent) 0 18px, transparent 18px);
+  box-shadow: 0 2px 2px rgb(0 0 0 / 0.06), 0 22px 40px -22px rgb(0 0 0 / 0.45);
+}
+
+/* A round fridge magnet holding a note up */
+.magnet {
+  position: absolute;
+  top: -12px;
+  height: 26px;
+  width: 26px;
+  border-radius: 9999px;
+  box-shadow: inset -3px -4px 0 rgb(0 0 0 / 0.18), 0 4px 8px rgb(0 0 0 / 0.25);
+}
+
+/* The fridge door: a soft sheen and the handle down the side (sign-in screen) */
+.fridge {
+  background: linear-gradient(100deg, var(--color-page) 0%, color-mix(in srgb, var(--color-page) 85%, white) 45%, var(--color-page) 100%);
+}
+:root[data-theme="dark"] .fridge {
+  background: linear-gradient(100deg, var(--color-page) 0%, color-mix(in srgb, var(--color-page) 88%, white) 45%, var(--color-page) 100%);
 }

@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque } from "next/font/google";
+import { Caveat, Nunito } from "next/font/google";
 import AppShell from "@/components/AppShell";
 import RegisterServiceWorker from "@/components/RegisterServiceWorker";
 import "./globals.css";
 
-const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-bricolage", display: "swap" });
+const nunito = Nunito({ subsets: ["latin"], variable: "--font-nunito", display: "swap" });
+const caveat = Caveat({ subsets: ["latin"], weight: ["700"], variable: "--font-caveat", display: "swap" });
 
 export const metadata: Metadata = {
   title: "TickList — one shopping and chores list for the whole house",
@@ -15,8 +16,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f3ea" },
-    { media: "(prefers-color-scheme: dark)", color: "#121814" },
+    { media: "(prefers-color-scheme: light)", color: "#eaf0ee" },
+    { media: "(prefers-color-scheme: dark)", color: "#16191a" },
   ],
 };
 
@@ -25,7 +26,7 @@ const themeScript = `try{var t=localStorage.getItem("ticklist:theme");if(t!=="li
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-ZA" className={bricolage.variable} suppressHydrationWarning>
+    <html lang="en-ZA" className={`${nunito.variable} ${caveat.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
